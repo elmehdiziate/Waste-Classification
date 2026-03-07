@@ -230,7 +230,7 @@ class EDAModule:
 
     def plot_sample_grid(self, n_samples: int = 5) -> None:
         """
-        Show ``n_samples`` random images per class in a grid.
+        Show 5 random images per class in a grid.
 
         WHY THIS MATTERS
         ----------------
@@ -243,11 +243,6 @@ class EDAModule:
 
         These observations feed directly into augmentation design and help
         you predict which class pairs will dominate your confusion matrix.
-
-        Parameters
-        ----------
-        n_samples : int
-            Number of random images to show per class (default 5).
         """
         # one grid per parent group — same readability fix as plot_class_distribution
         for parent, children in sorted(self.parent_classes.items()):
@@ -259,7 +254,7 @@ class EDAModule:
             fig, axes = plt.subplots(
                 n_classes, n_samples,
                 figsize=(n_samples * 2.2, n_classes * 2.0),
-                squeeze=False,   # always return 2-D array even for 1 class
+                squeeze=False,  
             )
             fig.suptitle(
                 f"WaRP-C — Random samples: '{parent}' group",
@@ -298,20 +293,16 @@ class EDAModule:
         WaRP-C images are bounding-box crops, so they are NOT all the same
         size.  Before choosing a resize target we need to know:
 
-        1. Typical size → informs target resolution (224 vs 256 vs 320).
+        1. Typical size : informs target resolution (224 vs 256 vs 320).
            Rule of thumb: use the 75th-percentile of the shorter side as
-           the resize target.  Upscaling by more than 3× introduces artefacts.
+           the resize target. 
 
-        2. Aspect ratio spread → if images are highly non-square, a plain
+        2. Aspect ratio spread : if images are highly non-square, a plain
            Resize(224, 224) distorts shapes.  Alternatives:
              - Pad to square first, then resize  (preserves shape exactly)
              - RandomResizedCrop  (standard for classification, handles it
                naturally and adds implicit augmentation)
 
-        Returns
-        -------
-        dict with per-axis (width / height / aspect_ratio) stats:
-        mean, median, min, max, p25, p75
         """
         all_paths = [
             p
@@ -404,25 +395,7 @@ class EDAModule:
                     mean=[0.485, 0.456, 0.406]  std=[0.229, 0.224, 0.225]
 
         Option B  Compute WaRP-C specific stats (better if the domain
-                  diverges significantly from natural photos — industrial
-                  waste on a conveyor belt is quite different).
-
-        Decision rule used here:
-          If mean absolute deviation from ImageNet < 0.05 → ImageNet stats OK.
-          Otherwise → use WaRP-C stats in Normalize().
-
-        We sample ``sample_size`` training images (fast estimate).  For the
-        final transforms.py you can increase this to all 8 823 images.
-
-        Parameters
-        ----------
-        sample_size : int
-            Number of training images to sample (default 1 500).
-
-        Returns
-        -------
-        dict with warp_mean, warp_std, imagenet_mean, imagenet_std,
-        mean_diff, recommendation
+                  diverges significantly from natural photos
         """
         all_train = [p for paths in self._train_data.values() for p in paths]
         sampled   = random.sample(all_train, min(sample_size, len(all_train)))
@@ -518,11 +491,7 @@ class EDAModule:
             properly, dragging down test metrics.
 
         We flag any class whose proportion deviates by more than 2 percentage
-        points — worth mentioning in the report.
-
-        Returns
-        -------
-        dict with per-class percentages and the max deviation found.
+        points
         """
         classes     = self.classes
         total_train = sum(len(v) for v in self._train_data.values())
@@ -589,14 +558,7 @@ class EDAModule:
 
         WHY THIS MATTERS
         ----------------
-        If the same image appears in both splits (data leakage), test accuracy
-        is artificially inflated — the model has already seen the test images.
-        Filename matching is O(n) and catches obvious leakage; a deeper check
-        would use MD5 or perceptual hashing (see imagehash library).
-
-        Returns
-        -------
-        dict with counts and up to 10 example duplicate filenames.
+        If the same image appears in both splits (data leakage)
         """
         train_names = {p.name for paths in self._train_data.values() for p in paths}
         test_names  = {p.name for paths in self._test_data.values()  for p in paths}
@@ -624,7 +586,7 @@ class EDAModule:
         return result
 
 
-    def plot_brightness_per_class(self, n_per_class: int = 60) -> dict:
+    def plot_brightness_per_class(self, n_per_class: int = 20) -> dict:
         """
         Mean luminance (brightness) per class, sampled from training images.
 
@@ -641,15 +603,6 @@ class EDAModule:
           2. The range of brightness values tells us how strong to make the
              ``brightness`` parameter in ``ColorJitter``.  A wide range means
              we need aggressive augmentation to make the model lighting-invariant.
-
-        Parameters
-        ----------
-        n_per_class : int
-            Number of images sampled per class for efficiency (default 60).
-
-        Returns
-        -------
-        dict with per-class brightness values plus darkest/brightest class.
         """
         classes    = self.classes
         brightness = {}
@@ -675,7 +628,7 @@ class EDAModule:
                 continue
 
             mean_vals = [brightness[c] for c in group_classes]
-            colors    = plt.cm.RdYlGn(np.array(mean_vals))  # red=dark, green=bright
+            colors    = plt.cm.RdYlGn(np.array(mean_vals))  
 
             fig, ax = plt.subplots(figsize=(max(8, len(group_classes) * 1.6), 5))
             ax.bar(group_classes, mean_vals, color=colors, alpha=0.9, edgecolor="white")
@@ -720,15 +673,7 @@ class EDAModule:
 
     def save_stats(self) -> Path:
         """
-        Write all accumulated stats to ``self.stats_file`` as JSON.
-
-        This file is loaded by ``Pipeline_/dataset.py`` so that class weights,
-        normalization values, and other derived numbers are computed only once
-        (here) rather than recomputed on every training run.
-
-        Returns
-        -------
-        Path to the written JSON file.
+        save all the stats to a json file that we can reuse for the data preprocessing
         """
         self.stats_file.parent.mkdir(parents=True, exist_ok=True)
         with open(self.stats_file, "w") as f:
@@ -740,7 +685,6 @@ class EDAModule:
     def summary(self) -> None:
         """
         Print a concise summary table of all findings.
-        Call this after running all analysis methods.
         """
         sep = "=" * 62
         print(f"\n{sep}")
