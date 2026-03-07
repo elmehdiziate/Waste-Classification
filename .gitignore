@@ -1,5 +1,7 @@
 # .gitignore
 Dataset/raw/
+Dataset/figures
+Dataset/dataset_stats.json
 Dataset/processed/
 *.zip
 __pycache__/
