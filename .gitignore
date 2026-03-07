@@ -1,0 +1,10 @@
+# .gitignore
+Dataset/raw/
+Dataset/processed/
+*.zip
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+*.pth          # model weights (also large)
+*.pt
+runs/          # training logs
