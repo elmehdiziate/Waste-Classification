@@ -54,12 +54,12 @@ class ResNet50(nn.Module):
             parameter.requires_grad = True
 
     def freeze(self):
-        for parameter in self.backbone.parameters():
+        for parameter in self.RN_backbone.parameters():
             parameter.requires_grad = False
 
     def get_parameter_counts(self) -> dict:     #for efficiency comparison table
-        total_parameters     = sum(p.numel() for parameter in self.parameters())
-        trainable_parameters = sum(p.numel() for parameter in self.parameters()
+        total_parameters     = sum(parameter.numel() for parameter in self.parameters())
+        trainable_parameters = sum(parameter.numel() for parameter in self.parameters()
                         if parameter.requires_grad)
         return {
             "model"           : self.model_name,
