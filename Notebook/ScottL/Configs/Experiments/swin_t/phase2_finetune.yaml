@@ -1,0 +1,36 @@
+base: configs/base.yaml
+run:
+  name: phase2_finetune
+  model: swin_t
+  phase: 2
+  author: TBD
+  notes: 'Phase 2 fine-tuning. Update lr and batch_size with best values from Phase
+    1 grid before running. Placeholder: lr=1e-4, bs=32.'
+training:
+  learning_rate: 0.0001
+  batch_size: 32
+  epochs: 50
+  pretrained: true
+  use_weighted_sampler: true 
+  label_smoothing: 0.1
+  mixed_precision: true
+augmentation:
+  random_horizontal_flip: true
+  random_crop: true
+  brightness: 0.3
+  contrast: 0.3
+  saturation: 0.3
+  hue: 0.1
+  random_erasing: true
+fine_tuning:
+  staged_lr: true
+  base_lr_mult: 0.1
+  new_layers:
+  - head
+  T_max: 30
+  gamma: 0.1
+  stepsize:
+  - 25
+  - 40
+output:
+  save_gradcam: true
