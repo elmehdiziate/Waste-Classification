@@ -6,13 +6,16 @@ def get_model(config: dict) -> nn.Module:
     backbone   = config["run"]["model"]
     n_classes  = config["dataset"]["n_classes"]
     pretrained = config["training"]["pretrained"]
-    weights    = "IMAGENET1K_V1" if pretrained else None
+
+    # Using pretrained ImageNet weights accelerates convergence and improves feature quality
+    # when the target dataset is smaller or visually similar to ImageNet.
+    weights = "IMAGENET1K_V1" if pretrained else None
 
     print(f"[Model] Loading {backbone} (pretrained={pretrained})")
 
-    # For all backbones, we replace only the classification head.
-    # This preserves the pretrained feature extractor while adapting the final layer
-    # to the number of classes in our dataset — a standard and efficient fine‑tuning strategy.
+    # Replacing only the classification head preserves the pretrained feature extractor.
+    # This is the core principle of transfer learning: reuse general visual features
+    # while adapting the final layer to the specific number of classes.
     if backbone == "resnet50":
         model = models.resnet50(weights=weights)
         model.fc = nn.Linear(model.fc.in_features, n_classes)
@@ -35,10 +38,11 @@ def get_model(config: dict) -> nn.Module:
             "Choose from: resnet50, efficientnet_b3, swin_t, convnext_t"
         )
 
-    # Parameter summary helps verify fine‑tuning strategy (e.g., staged LR, frozen layers).
+    # Parameter counts help verify the fine‑tuning strategy.
+    # A large gap between total and trainable parameters indicates frozen layers,
+    # which is useful when applying staged learning rates or partial fine‑tuning.
     total_params     = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"[Model] Params — total: {total_params:,} | trainable: {trainable_params:,}")
 
     return model
-

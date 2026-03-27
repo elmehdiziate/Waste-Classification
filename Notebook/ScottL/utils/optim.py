@@ -6,11 +6,13 @@ def get_optimizer(model, config: dict):
     ft_cfg  = config["fine_tuning"]
     lr      = config["training"]["learning_rate"]
 
-    # Staged LR: lower LR for backbone, higher LR for new layers
+    # Staged learning rates protect pretrained backbone features by updating them more gently,
+    # while allowing newly‑initialised classification layers to learn quickly.
     if ft_cfg["staged_lr"]:
         new_layer_names = ft_cfg.get("new_layers", ["fc", "classifier", "head"])
         head_params, backbone_params = [], []
 
+        # Parameter grouping enables differential learning rates across the network.
         for name, param in model.named_parameters():
             if any(layer in name for layer in new_layer_names):
                 head_params.append(param)
@@ -25,11 +27,13 @@ def get_optimizer(model, config: dict):
         print(f"[Optimizer] Staged LR — backbone: {lr * ft_cfg['base_lr_mult']:.2e} | head: {lr:.2e}")
 
     else:
-        # Uniform LR for all parameters
+        # Uniform LR is appropriate when training from scratch or when full fine‑tuning is desired.
         param_groups = model.parameters()
         print(f"[Optimizer] Uniform LR — {lr:.2e}")
 
-    # Select optimizer type
+    # Optimizer choice shapes convergence behaviour:
+    # Adam adapts per‑parameter learning rates and handles noisy gradients well,
+    # while SGD with momentum often yields stronger generalisation in vision tasks.
     if opt_cfg["type"] == "adam":
         return torch.optim.Adam(
             param_groups,
@@ -57,12 +61,16 @@ def get_scheduler(optimizer, config: dict):
     sched_type = config["scheduler"]["type"]
     ft_cfg     = config["fine_tuning"]
 
+    # Cosine annealing provides a smooth, non‑monotonic decay that helps the model
+    # escape shallow minima and stabilises late‑stage training.
     if sched_type == "CosineAnnealingLR":
         return torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer,
             T_max=ft_cfg["T_max"]
         )
 
+    # Multi‑step decay applies abrupt LR drops at predefined epochs,
+    # which can help the optimiser settle into a better minimum after plateaus.
     elif sched_type == "multi_step":
         return torch.optim.lr_scheduler.MultiStepLR(
             optimizer,

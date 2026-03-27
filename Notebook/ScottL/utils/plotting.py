@@ -6,6 +6,8 @@ from sklearn.metrics import confusion_matrix
 
 # Save training/validation metrics as JSON
 def save_metrics(metrics: dict, output_dir: str):
+    # Persisting metrics allows full reproducibility and enables later comparison
+    # across experiments, hyperparameter sweeps, or ablation studies.
     path = os.path.join(output_dir, "metrics.json")
     with open(path, "w") as f:
         json.dump(metrics, f, indent=2)
@@ -14,9 +16,12 @@ def save_metrics(metrics: dict, output_dir: str):
 
 # Plot loss and accuracy curves over training
 def save_loss_curves(metrics: dict, output_dir: str):
+    # Visualising training dynamics helps diagnose underfitting, overfitting,
+    # learning‑rate issues, and optimisation instability.
     epochs = range(1, len(metrics["train_loss"]) + 1)
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
 
+    # Loss curves reveal optimisation behaviour and whether the model is converging.
     ax1.plot(epochs, metrics["train_loss"], label="Train")
     ax1.plot(epochs, metrics["val_loss"], label="Val")
     ax1.set_title("Loss")
@@ -24,6 +29,7 @@ def save_loss_curves(metrics: dict, output_dir: str):
     ax1.set_ylabel("Loss")
     ax1.legend()
 
+    # Accuracy curves provide an intuitive measure of performance progression.
     ax2.plot(epochs, metrics["train_acc"], label="Train")
     ax2.plot(epochs, metrics["val_acc"], label="Val")
     ax2.set_title("Accuracy")
@@ -40,12 +46,14 @@ def save_loss_curves(metrics: dict, output_dir: str):
 
 # Save confusion matrix heatmap
 def save_confusion_matrix(labels, preds, class_names: list, output_dir: str):
+    # Confusion matrices expose systematic class‑pair confusions and are essential
+    # for diagnosing where the model struggles, especially in imbalanced datasets.
     cm = confusion_matrix(labels, preds, labels=list(range(len(class_names))))
     fig, ax = plt.subplots(figsize=(20, 18))
 
     sns.heatmap(
         cm,
-        annot=False,
+        annot=False,          # heatmap is cleaner without dense text for many classes
         fmt="d",
         cmap="Blues",
         ax=ax,
