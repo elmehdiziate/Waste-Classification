@@ -1,0 +1,93 @@
+Why ResNet50 is a Good Choice for Waste Classification
+
+Architectural Advantages:
+
+ - Residual connections prevent vanishing gradients, enabling effective training of deep networks
+
+ - Bottleneck design (1×1 convolutions) reduces computational cost while maintaining representational power
+
+ - 2048-dimensional feature vector captures both low-level (texture, edges) and high-level (shape, composition) features
+
+ - Critical for distinguishing visually similar waste materials (plastic vs. paper, glass vs. clear plastic)
+
+
+Transfer Learning Suitability:
+
+ - Pretrained on ImageNet-1K (1.2M images, 1000 classes)
+
+ - Pretraining includes objects with textures similar to waste (bottles, cans, cardboard, bags)
+
+ - Provides strong foundation for fine-grained waste classification tasks
+
+
+====================================== Implementation Justification =============================================================
+Pretrained Weights:
+
+ - IMAGENET1K_V2 used instead of V1
+
+ - Improved accuracy on downstream tasks
+
+ - Better feature representations for transfer learning
+
+
+Freezing Mechanism:
+
+ - freeze=True enables two-phase training strategy
+
+ - Phase 1: Train only classifier head (10-20 epochs, higher LR)
+
+ - Phase 2: Unfreeze backbone for fine-tuning (20-50 epochs, lower LR)
+
+ - Prevents destruction of pretrained features during initial training
+
+ - Essential when working with moderate-sized waste datasets
+
+
+Classification Head Design:
+
+ - Progressive compression: 2048 → 512 → 28
+
+ - Intermediate 512-dim layer learns task-specific feature combinations
+
+ - Prevents overfitting compared to direct 2048 → 28 mapping
+
+
+Dropout Strategy:
+
+ - Dropout 0.4 on first linear layer → strong regularization
+
+ - Dropout 0.2 on second linear layer → lighter regularization before final classification
+
+ - Prevents over-reliance on specific features
+
+ - Improves generalization to real-world waste images
+
+
+Parameter Counting Methods:
+
+ - Enables model efficiency comparison across architectures
+
+ - Total parameters: ~25.6M
+
+ - Trainable parameters adjustable via freeze/unfreeze
+
+================= Training Strategy =====================================
+Two-Phase Approach:
+
+Phase 1
+	Backbone: Frozen
+	Adapts classifier to waste classification
+	Learning rate is 1e-3 to 1e-4
+	Epochs 10-20
+	
+Phase 2
+	Backbone: Unfrozen
+	Fine-tune for waste-specific features
+	Learning rate is 1e-5 to 1e-6
+	Epochs 20-50
+
+Rationale:
+Phase 1: Leverages ImageNet features while learning waste-specific decision boundaries
+
+Phase 2: Gradually adjusts backbone features for waste domain without catastrophic forgetting
+
