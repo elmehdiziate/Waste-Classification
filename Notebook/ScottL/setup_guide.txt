@@ -1,0 +1,45 @@
+Application Setup and Execution Guide
+
+1.1 Download the dataset and place in the folder Dataset from https://www.kaggle.com/datasets/parohod/warp-waste-recycling-plant-dataset
+1.2. Place the downloaded archive inside the project’s 'Dataset/' directory.
+1.3. Extract it so the structure becomes:  
+   Dataset/
+       Warp-C/
+           cardboard/
+           glass/
+           metal/
+           ...
+
+1.4. Restructure the dataset for PyTorch using the provided script:
+   python Dataset/prepare_data.py --warp_c_root Dataset/Warp-C --output_root data --val_split 0.2 --seed 42
+   This flattens the nested folders and generates consistent train/val/test splits.
+
+---
+
+2 Install Dependencies
+Install all required Python packages using the project’s `requirements.txt`:
+pip install -r requirements.txt
+
+A virtual environment is recommended, and you can verify GPU support with:
+python import torch torch.cuda.is_available()
+
+---
+
+3. Run the Smoke Test (Training)
+Open 'train.ipynb' and run all cells in order.  
+This performs a short training run to confirm the full pipeline works.
+
+---
+
+4. Run the Smoke Test (Evaluation)
+Open 'test.ipynb' and run all cells.  
+This loads the saved checkpoint and evaluates the model on the test set.
+
+---
+
+ 5. Expected Outputs
+After both notebooks run successfully, you should see:
+
+- `data/` — processed dataset  
+- `outputs/<model>/<run_name>/` — metrics, plots, and best model checkpoint  
+- `metrics.json`, `loss_curves.png`, `confusion_matrix.png`  
