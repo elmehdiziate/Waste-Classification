@@ -1,0 +1,27 @@
+base: configs/base.yaml
+run:
+  name: phase1_lr5e-5_bs128
+  model: efficientnet_b3
+  phase: 1
+  author: TBD
+  notes: Phase 1 grid run. lr=5e-5, bs=128.
+training:
+  learning_rate: 5.0e-05
+  batch_size: 128
+  epochs: 30
+  pretrained: true
+  use_weighted_sampler: false
+  label_smoothing: 0.0
+  mixed_precision: false
+fine_tuning:
+  staged_lr: false
+  base_lr_mult: 0.1
+  new_layers:
+  - classifier
+  T_max: 20
+  gamma: 0.1
+  stepsize:
+  - 20
+  - 40
+output:
+  save_gradcam: false

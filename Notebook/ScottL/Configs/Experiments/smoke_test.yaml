@@ -1,0 +1,27 @@
+base: "configs/base.yaml"
+
+run:
+  name: "smoke_test"          # this becomes experiments/results/resnet50/smoke_test/
+  model: "resnet50"
+  phase: 1
+  author: "ScottL"
+  notes: "Quick smoke test — 2 epochs, tiny batch, GPU verification"
+
+training:
+  learning_rate: 0.0001
+  batch_size: 8
+  epochs: 2
+  pretrained: false
+  use_weighted_sampler: false
+  label_smoothing: 0.0
+  mixed_precision: false
+
+fine_tuning:
+  staged_lr: false
+  base_lr_mult: 0.1
+  T_max: 2
+  gamma: 0.1
+  stepsize: [1, 2]
+
+output:
+  save_gradcam: false
