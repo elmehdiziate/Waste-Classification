@@ -29,3 +29,34 @@ Input Image
 [Convolution Blocks] → Fuses local + global features
     ↓
 Classification Output
+
+Why Transfer Learning
+Use of ImageNet-pretrained MobileViT weights. Even though ImageNet doesn't have waste classes, it provides strong foundational features for texture and shape recognition
+
+Why Two-Phase Training
+Phase	    What	                            Why
+Phase 1	    Freeze backbone, train classifier	Preserve pretrained features while adapting to waste classes
+Phase 2	    Unfreeze, fine-tune entire model	Gradually adjust features for waste domain
+
+This prevents catastrophic forgetting - the model doesn't 'forget' its pretrained knowledge while learning waste-specific features
+
+Training Strategy
+
+Hyperparameter Selection
+Hyperparameter	        Value	    Justification
+Batch size	            32          Balances memory and gradient stability
+Learning rate (Phase 1)	1e-3	    Higher for training new classifier
+Learning rate (Phase 2)	1e-5	    Lower for fine-tuning backbone
+Optimizer	            AdamW	    Better weight decay control than Adam
+Epochs (Phase 1)	    20	        Sufficient for classifier adaptation
+Epochs (Phase 2)	    30-50	    Gradual backbone fine-tuning
+
+Addressing Class Imbalance
+The 52:1 imbalance is a critical challenge. We address it through:
+Method	                            How It Helps
+Weighted loss function	            Rare classes get higher loss weight
+Oversampling minority classes	    Duplicate rare class images during training
+Data augmentation	                More augmentation for minority classes
+
+Loss Function
+to use weighted cross-entropy loss where each class gets weight = 1 / (frequency). This forces the model to pay more attention to rare classes like bottle-oil-full.
