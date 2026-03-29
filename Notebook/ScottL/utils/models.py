@@ -19,6 +19,12 @@ def get_model(config: dict) -> nn.Module:
     if backbone == "resnet50":
         model = models.resnet50(weights=weights)
         model.fc = nn.Linear(model.fc.in_features, n_classes)
+    
+    elif backbone == "vit_b":
+        vit_weights = models.ViT_B_16_Weights.IMAGENET1K_V1 if pretrained else None
+        model = models.vit_b_16(weights=vit_weights)
+        in_features = model.heads.head.in_features   
+        model.heads.head = nn.Linear(in_features, n_classes)
 
     elif backbone == "efficientnet_b3":
         model = models.efficientnet_b3(weights=weights)
