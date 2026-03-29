@@ -1,3 +1,6 @@
+"""
+El Mehdi Ziate
+"""
 # this is a class that will explore the data that we have initialy so we can detect trends, class imbalance ...
 import json
 import random

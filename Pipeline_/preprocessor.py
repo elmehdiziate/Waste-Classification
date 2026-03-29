@@ -1,6 +1,4 @@
 """
-Pipeline_/preprocessor.py
-==========================
 OOP wrapper that encapsulates ALL preprocessing and augmentation decisions
 for the WaRP-C dataset in one single class.
 EEEM068: Applied Machine Learning — University of Surrey, Spring 2026
@@ -10,6 +8,8 @@ Usage:
     pp = WaRPPreprocessor()
     pp.summary()
     train_loader, test_loader = pp.get_loaders()
+
+El Mehdi Ziate, 2026-03-17
 """
 
 import json
@@ -28,11 +28,9 @@ from PIL import Image
 from tqdm import tqdm
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Constants derived from EDA results (dataset_stats.json)
-# ─────────────────────────────────────────────────────────────────────────────
 
-IMG_SIZE = 224          # required by ALL pretrained backbones (ResNet, ViT, YOLO…)
+
+IMG_SIZE = 224          # px  — required by ALL pretrained backbones (ResNet, ViT, )
                         #       ImageNet, the dataset all pretrained models were trained on,
                         #       uses 224×224 as the standard input size.
 
@@ -43,14 +41,10 @@ IMAGENET_MEAN = [0.485, 0.456, 0.406]   # kept for reference — pretrained mode
 IMAGENET_STD  = [0.229, 0.224, 0.225]   # normalised with these values during pretraining
 
 MINORITY_THRESHOLD = 0.30   # classes with < 30% of global mean = minority
-                             # global mean = 8823/28 ≈ 315 → minority < 94 images
+                      
 
 VALID_EXTS = {".jpg", ".jpeg", ".png"}
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 1.  PadToSquare  (custom torchvision-compatible transform)
-# ─────────────────────────────────────────────────────────────────────────────
 
 class PadToSquare:
     """
@@ -92,10 +86,6 @@ class PadToSquare:
     def __repr__(self):
         return f"PadToSquare(mode={self.padding_mode!r})"
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 2.  WaRPDataset  (PyTorch Dataset)
-# ─────────────────────────────────────────────────────────────────────────────
 
 class WaRPDataset(Dataset):
     """
@@ -146,7 +136,6 @@ class WaRPDataset(Dataset):
 
         self._load_stats(Path(stats_file))
 
-    # ── private ──────────────────────────────────────────────────────────────
 
     def _load_stats(self, stats_file: Path) -> None:
         """
@@ -175,7 +164,6 @@ class WaRPDataset(Dataset):
         norm      = len(raw_w) / sum(raw_w)
         self._class_weights = torch.tensor([w * norm for w in raw_w], dtype=torch.float32)
 
-    # ── public ───────────────────────────────────────────────────────────────
 
     @property
     def class_weights(self) -> Optional[torch.Tensor]:
@@ -211,10 +199,6 @@ class WaRPDataset(Dataset):
         return img, label
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 3.  WaRPPreprocessor  (main OOP interface)
-# ─────────────────────────────────────────────────────────────────────────────
-
 class WaRPPreprocessor:
     """
     All-in-one preprocessing and data pipeline for WaRP-C.
@@ -235,7 +219,7 @@ class WaRPPreprocessor:
 
     def __init__(
         self,
-        raw_root:       str | Path = "Dataset/raw/WaRP-C",
+        raw_root:       str | Path = "Dataset/raw/Warp-C",
         processed_root: str | Path = "Dataset/processed",
         stats_file:     str | Path = "Dataset/dataset_stats.json",
         img_size:       int  = IMG_SIZE,
@@ -258,7 +242,6 @@ class WaRPPreprocessor:
         self.train_dir = self.raw_root / "train_crops"
         self.test_dir  = self.raw_root / "test_crops"
 
-    # ── A. Transform pipelines ────────────────────────────────────────────────
 
     def get_train_transforms(self) -> T.Compose:
         """
@@ -437,7 +420,6 @@ class WaRPPreprocessor:
         mixed_lbl = lam * one_hot + (1 - lam) * one_hot[idx]
         return mixed, mixed_lbl
 
-    # ── B. Dataset cleaning (one-time) ────────────────────────────────────────
 
     def prepare(self, force: bool = False) -> None:
         """
@@ -520,29 +502,85 @@ class WaRPPreprocessor:
         print(f"  ✓ Leakage removed : {len(duplicates)}")
         print(f"  ✓ Output → {self.processed_root}/")
 
-    # ── C. DataLoader factory ─────────────────────────────────────────────────
+    _MODEL_PROFILES: dict = {
+        "resnet50":     (True,  True,  False, 0.6),
+        "efficientnet": (True,  True,  True,  0.6),
+        "swin":         (True,  True,  True,  0.6),
+        "convnext":     (True,  True,  True,  0.6),
+        "edgevit":      (True,  True,  False, 0.7),
+        "mobilevit":    (True,  True,  False, 0.7),
+        "llava":        (False, False, False, 1.0),
+        "gnn":          (False, False, False, 1.0),
+        "default":      (True,  True,  False, 0.6),
+    }
+
+    def _make_train_transforms(self, crop_scale_min: float = 0.6) -> T.Compose:
+        """Train pipeline with configurable crop scale (used by model profiles)."""
+        return T.Compose([
+            PadToSquare(padding_mode="reflect"),
+            T.RandomResizedCrop(self.img_size, scale=(crop_scale_min, 1.0), ratio=(0.85, 1.15)),
+            T.RandomHorizontalFlip(p=0.5),
+            T.RandomVerticalFlip(p=0.3),
+            T.RandomChoice([
+                T.RandomRotation(degrees=30),
+                T.RandomRotation(degrees=(90,  90)),
+                T.RandomRotation(degrees=(180, 180)),
+                T.RandomRotation(degrees=(270, 270)),
+            ]),
+            T.ColorJitter(brightness=0.4, contrast=0.3, saturation=0.3, hue=0.05),
+            T.RandomApply([T.GaussianBlur(kernel_size=3, sigma=(0.1, 1.5))], p=0.2),
+            T.ToTensor(),
+            T.Normalize(mean=self.mean, std=self.std),
+            T.RandomErasing(p=0.3, scale=(0.02, 0.2), ratio=(0.3, 3.3), value="random"),
+        ])
 
     def get_loaders(
         self,
+        model_type:       str  = "default",
         use_sampler:      bool = True,
         use_minority_aug: bool = True,
     ) -> tuple[DataLoader, DataLoader]:
         """
         Build train and test DataLoaders.
 
-        Imbalance strategy (ρ = 59.67 → Buda et al. 2018 Tier 3):
-          Layer 1 — WeightedRandomSampler   : minority classes sampled more often
-          Layer 2 — CrossEntropyLoss weight : via get_class_weights()
-          Layer 3 — Minority transforms     : stronger augmentation on rare classes
+        Pass model_type and everything is configured automatically.
 
-        Parameters
-        ----------
-        use_sampler      : enable WeightedRandomSampler (recommended)
-        use_minority_aug : route minority classes to stronger transform pipeline
+        Supported model_type values
+        ---------------------------
+        "resnet50"     : standard aug, sampler ON,  mixup OFF
+        "efficientnet" : standard aug, sampler ON,  mixup ON
+        "swin"         : standard aug, sampler ON,  mixup ON
+        "convnext"     : standard aug, sampler ON,  mixup ON
+        "edgevit"      : gentler crop (0.7), sampler ON,  mixup OFF
+        "mobilevit"    : gentler crop (0.7), sampler ON,  mixup OFF
+        "llava"        : val pipeline only (no training)
+        "gnn"          : val pipeline only (feature extraction)
+        "default"      : standard aug, sampler ON,  mixup OFF
+
+        IMPORTANT: Dataset/processed/ stores original-size CLEANED images.
+        The 224x224 normalised tensor is created in RAM by the DataLoader
+        on every batch load. Nothing augmented is ever saved to disk.
+
+        Imbalance strategy (rho=59.67, Buda et al. 2018 Tier 3):
+          Layer 1 - WeightedRandomSampler   : minority classes sampled more often
+          Layer 2 - CrossEntropyLoss weight : via get_class_weights()
+          Layer 3 - Minority transforms     : stronger augmentation on rare classes
         """
+        profile = self._MODEL_PROFILES.get(model_type.lower(),
+                                           self._MODEL_PROFILES["default"])
+        use_sampler, use_minority_aug, self._use_mixup, crop_min = profile
+        is_inference_only = model_type.lower() in ("llava", "gnn")
+
+        print(f"[get_loaders] model='{model_type}'  sampler={use_sampler}  "
+              f"minority_aug={use_minority_aug}  mixup={self._use_mixup}  "
+              f"crop_min={crop_min}  inference_only={is_inference_only}")
+
+        train_transform = (self.get_val_transforms() if is_inference_only
+                           else self._make_train_transforms(crop_min))
+
         train_ds = WaRPDataset(
             root               = self.processed_root / "train",
-            transform          = self.get_train_transforms(),
+            transform          = train_transform,
             minority_transform = self.get_minority_transforms() if use_minority_aug else None,
             stats_file         = self.stats_file,
         )
@@ -551,6 +589,7 @@ class WaRPPreprocessor:
             transform  = self.get_val_transforms(),
             stats_file = self.stats_file,
         )
+
 
         # WeightedRandomSampler
         sampler = None
@@ -611,7 +650,6 @@ class WaRPPreprocessor:
         norm   = len(raw_w) / sum(raw_w)
         return torch.tensor([w * norm for w in raw_w], dtype=torch.float32).to(device)
 
-    # ── D. Summary ────────────────────────────────────────────────────────────
 
     def summary(self) -> None:
         """Print a full pipeline summary — useful at the top of any notebook."""
@@ -636,7 +674,6 @@ class WaRPPreprocessor:
         print(f"\n  Leakage fix     : 18 duplicate filenames removed from train")
         print(sep)
 
-    # ── Private helpers ───────────────────────────────────────────────────────
 
     def _find_duplicates(self) -> set[str]:
         """Live scan: filenames that appear in both train and test splits."""
