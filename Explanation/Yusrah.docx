@@ -1,0 +1,62 @@
+MobileViT (2021) - The Simpler Hybrid
+MobileViT is a hybrid model that uses CNNs to capture local details (textures, edges) and Transformers to capture global context (overall shape and relationships) .
+
+How It Works (Simple Version)
+Image → CNN (learns local features) → Transformer (learns global relationships) → CNN → Result
+
+The Key Insight
+Instead of applying Transformer to the whole image (which is expensive), MobileViT:
+Unfolds the image into small patches
+Applies Transformer only to those patches to understand patch-to-patch relationships
+Folds them back into a full image 
+
+Why It's Good for Your Waste Project
+Benefit			Explanation
+Smaller			5.3-5.6 million parameters (vs ResNet50's 25.6M) 
+Fast			~18ms per image on mobile hardware 
+Accurate		85%+ accuracy on image classification 
+Easy to explain	"CNN for details, Transformer for the big picture"
+
+
+Simple Architecture Diagram:
+
+Input Image
+    ↓
+[Convolution Blocks] → Learns textures, edges, local patterns
+    ↓
+[MobileViT Block] → Learns how patches relate to each other
+    ↓
+[Convolution Blocks] → Fuses local + global features
+    ↓
+Classification Output
+
+Why Transfer Learning
+Use of ImageNet-pretrained MobileViT weights. Even though ImageNet doesn't have waste classes, it provides strong foundational features for texture and shape recognition
+
+Why Two-Phase Training
+Phase	    What	                            Why
+Phase 1	    Freeze backbone, train classifier	Preserve pretrained features while adapting to waste classes
+Phase 2	    Unfreeze, fine-tune entire model	Gradually adjust features for waste domain
+
+This prevents catastrophic forgetting - the model doesn't 'forget' its pretrained knowledge while learning waste-specific features
+
+Training Strategy
+
+Hyperparameter Selection
+Hyperparameter	        Value	    Justification
+Batch size	            32          Balances memory and gradient stability
+Learning rate (Phase 1)	1e-3	    Higher for training new classifier
+Learning rate (Phase 2)	1e-5	    Lower for fine-tuning backbone
+Optimizer	            AdamW	    Better weight decay control than Adam
+Epochs (Phase 1)	    20	        Sufficient for classifier adaptation
+Epochs (Phase 2)	    30-50	    Gradual backbone fine-tuning
+
+Addressing Class Imbalance
+The 52:1 imbalance is a critical challenge. We address it through:
+Method	                            How It Helps
+Weighted loss function	            Rare classes get higher loss weight
+Oversampling minority classes	    Duplicate rare class images during training
+Data augmentation	                More augmentation for minority classes
+
+Loss Function
+to use weighted cross-entropy loss where each class gets weight = 1 / (frequency). This forces the model to pay more attention to rare classes like bottle-oil-full.

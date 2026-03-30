@@ -2,6 +2,9 @@
 '''
 Date: 10/03/2026
 Author: Umme-Yusrah Sumtally
+
+Date: 25/03/2026
+added forward_features function and updated forward function
 '''
 
 import torch
@@ -44,8 +47,11 @@ class ResNet50(nn.Module):
             nn.Linear(512, num_classes)            #final prediction layer
         )
 
+	def forward_features(self, x: torch.Tensor) -> torch.Tensor: #extract features before classification
+    	return self.RN_backbone(x)  							# a separate function is used to ensure reusability
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        features = self.RN_backbone(x)       # visual features extracted
+        features = self.forward_features(x)   
         logits   = self.classifier(features)  # mapping features to class predictions
         return logits
 
