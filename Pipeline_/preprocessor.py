@@ -508,6 +508,7 @@ class WaRPPreprocessor:
         "swin":         (True,  True,  True,  0.6),
         "convnext":     (True,  True,  True,  0.6),
         "edgevit":      (True,  True,  False, 0.7),
+        "vit":          (True,  True,  True,  0.6),
         "mobilevit":    (True,  True,  False, 0.7),
         "llava":        (False, False, False, 1.0),
         "gnn":          (False, False, False, 1.0),
