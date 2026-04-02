@@ -7,6 +7,9 @@ Description: Basic working version of MobileViT
 Date: 31/03/2026
 Description: added 2 functions (parameter counting + repr)
 
+Date: 02/04/2026
+Description: Added dropout and naming bux fix
+
 '''
 #Importing libraries
 import torch
@@ -16,11 +19,13 @@ from transformers import MobileViTForImageClassification
 
 class MobileViT(nn.Module):
 
-    def __init__(self, number_of_classes: int = 28,
+    def __init__(self, number_of_classes: int = 28, 
+                 dropout: float = 0.2,
                  freeze: bool = True):
         super(MobileViT, self).__init__()
 
         self.number_of_classes = number_of_classes
+        self.dropout = dropout
         self.MobileViT_model = "MobileViT-Small"  #small model that uses 5.6M parameters and have a 98% accuracy on waste classification
 
         #loading pre trained ViT from Hugging face
@@ -30,7 +35,7 @@ class MobileViT(nn.Module):
         input_features = self.pretrained_backbone.classifier.in_features
 
         #New classification head for 28 waste classes
-        self.classifier = nn.Linear(input_features, number_of_classes)
+        self.MobileViT_classifier = nn.Sequential(nn.Dropout(p=dropout), nn.Linear(input_features, number_of_classes))
 
 
         # replacing the classifcation head from the pretrained backbon of Huggingface to adapt model to the waste classification of 28 classes only
