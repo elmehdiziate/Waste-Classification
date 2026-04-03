@@ -47,8 +47,8 @@ class ResNet50(nn.Module):
             nn.Linear(512, num_classes)            #final prediction layer
         )
 
-	def forward_features(self, x: torch.Tensor) -> torch.Tensor: #extract features before classification
-    	return self.RN_backbone(x)  							# a separate function is used to ensure reusability
+    def forward_features(self, x: torch.Tensor) -> torch.Tensor: #extract features before classification
+        return self.RN_backbone(x)  							# a separate function is used to ensure reusability
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         features = self.forward_features(x)   
