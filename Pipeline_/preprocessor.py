@@ -445,10 +445,11 @@ class WaRPPreprocessor:
         The _use_mixup flag is set automatically by get_loaders(model_type=...).
         """
         lam   = float(np.random.beta(alpha, alpha))
-        idx   = torch.randperm(images.size(0))
+        idx   = torch.randperm(images.size(0), device=images.device)  # same device
         mixed = lam * images + (1 - lam) * images[idx]
-        one_hot   = torch.zeros(images.size(0), num_classes).scatter_(
-                        1, labels.view(-1, 1), 1.0)
+        # create one_hot on the SAME device as labels
+        one_hot   = torch.zeros(images.size(0), num_classes, device=images.device)
+        one_hot.scatter_(1, labels.view(-1, 1), 1.0)
         mixed_lbl = lam * one_hot + (1 - lam) * one_hot[idx]
         return mixed, mixed_lbl
  
