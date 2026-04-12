@@ -6,8 +6,6 @@ Author: Scott Lewis
 ResNet50 fine-tuned for 28-class Warp-C classification.
 
 Design rationale:
-- BatchNorm1d stabilises backbone features before the head sees them;
-  important when domain shift from ImageNet to WaRP-C is significant
 - Bottleneck (→512) gives the head capacity to bridge ImageNet features
   to industrial waste domain; justified by small dataset size (8,823 images)
 - ReLU after Linear (correct placement — not before)
@@ -44,12 +42,11 @@ class ResNet50(nn.Module):
 
         # WaRP-C optimised head: bottleneck with domain-shift stabilisation
         self.classifier = nn.Sequential(
-            nn.Flatten(),                              # (B,2048,1,1) → (B,2048)
-            nn.BatchNorm1d(self.in_features),          # stabilises features under domain shift
-            nn.Linear(self.in_features, 512),          # bottleneck compression layer
-            nn.ReLU(inplace=True),                     # non-linearity after linear (correct placement)
-            nn.Dropout(p=dropout),                     # regularisation after activation
-            nn.Linear(512, num_classes)                # final projection to class scores
+            nn.Flatten(),                      # (B,2048,1,1) → (B,2048)
+            nn.Linear(self.in_features, 512),  # bottleneck
+            nn.ReLU(inplace=True),
+            nn.Dropout(p=dropout),
+            nn.Linear(512, num_classes)        # final logits
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -86,5 +83,5 @@ class ResNet50(nn.Module):
             f"  total params    : {counts['total_M']}M\n"
             f"  trainable params: {counts['trainable_M']}M\n"
             f"  backbone        : ResNet-50 (ImageNet-1k V2)\n"
-            f"  head            : BatchNorm1d → Linear({self.in_features}→512) → ReLU → Dropout → Linear(512→{self.num_classes})"
+            f"  head            : Linear({self.in_features}→512) → ReLU → Dropout → Linear(512→{self.num_classes})"
         )
