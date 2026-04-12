@@ -20,7 +20,7 @@ from tqdm import tqdm
  
 # ── Constants derived from EDA ─────────────────────────────────────────────
  
-IMG_SIZE = 224
+IMG_SIZE = 384
  
 # WaRP-C pixel statistics — EDA computed, mean_diff from ImageNet = 0.105 > 0.05
 # We use WaRP-C stats, NOT ImageNet stats
@@ -194,6 +194,8 @@ class WaRPPreprocessor:
                     weight=pp.get_class_weights(device='cuda'))
     """
  
+class WaRPPreprocessor:
+
     def __init__(
         self,
         raw_root:       str | Path = "Dataset/raw/Warp-C",
@@ -202,13 +204,14 @@ class WaRPPreprocessor:
         img_size:       int  = IMG_SIZE,
         mean:           list = WARP_MEAN,
         std:            list = WARP_STD,
-        batch_size:     int  = 32,
+        batch_size:     int  = 16,
         num_workers:    int  = 12,
         seed:           int  = 42,
-
-         extra_rotation=False, 
-         extra_color=False, 
-         extra_blur=False
+        extra_rotation=False,
+        extra_color=False,
+        extra_blur=False,
+        use_trivial_augment=False,      # <-- NEW
+        batch_size_override=None        # <-- NEW
     ):
         self.raw_root       = Path(raw_root)
         self.processed_root = Path(processed_root)
@@ -221,8 +224,11 @@ class WaRPPreprocessor:
         self.seed           = seed
 
         self.extra_rotation = extra_rotation
-        self.extra_color = extra_color
-        self.extra_blur = extra_blur
+        self.extra_color    = extra_color
+        self.extra_blur     = extra_blur
+
+        self.use_trivial_augment = use_trivial_augment   # <-- NEW
+        self.batch_size_override = batch_size_override   # <-- NEW
 
         self._use_mixup     = False
  
@@ -342,9 +348,8 @@ class WaRPPreprocessor:
           → StrongColorJitter → GaussianBlur → ToTensor → Normalize → Erasing
         NOTE: MixUp is applied in the training loop, not here.
         """
-        return T.Compose([
+        tfm = [
             PadToSquare(padding_mode="reflect"),
-            # wider crop range than CNN — transformers handle scale better
             T.RandomResizedCrop(self.img_size, scale=(0.5, 1.0),
                                 ratio=(0.75, 1.33)),
             T.RandomHorizontalFlip(p=0.5),
@@ -355,13 +360,19 @@ class WaRPPreprocessor:
                 T.RandomRotation(degrees=(180, 180)),
                 T.RandomRotation(degrees=(270, 270)),
             ]),
-            # slightly stronger than pretrained CNN
             T.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.05),
             T.RandomApply([T.GaussianBlur(kernel_size=3, sigma=(0.1, 2.0))], p=0.25),
             T.ToTensor(),
             T.Normalize(mean=self.mean, std=self.std),
             T.RandomErasing(p=0.35, scale=(0.02, 0.25), ratio=(0.3, 3.3), value="random"),
-        ])
+        ]
+
+        # --- NEW: Insert TrivialAugmentWide ---
+        if self.use_trivial_augment:
+            print("[Augment] Applying TrivialAugmentWide")
+            tfm.insert(1, T.TrivialAugmentWide())
+        
+        return T.Compose(tfm)
  
  
     def _get_minority_transforms(self) -> T.Compose:
@@ -576,23 +587,26 @@ class WaRPPreprocessor:
                 generator   = g,
             )
  
+        batch_size = self.batch_size_override or self.batch_size   # <-- NEW
+
         train_loader = DataLoader(
             train_ds,
-            batch_size         = self.batch_size,
-            sampler            = sampler,
-            shuffle            = sampler is None,
-            num_workers        = self.num_workers,
-            pin_memory         = True,
-            persistent_workers = self.num_workers > 0,
-            drop_last          = True,
+            batch_size=batch_size,      # <-- UPDATED
+            sampler=sampler,
+            shuffle=sampler is None,
+            num_workers=self.num_workers,
+            pin_memory=True,
+            persistent_workers=self.num_workers > 0,
+            drop_last=True,
         )
+
         test_loader = DataLoader(
             test_ds,
-            batch_size         = self.batch_size,
-            shuffle            = False,
-            num_workers        = self.num_workers,
-            pin_memory         = True,
-            persistent_workers = self.num_workers > 0,
+            batch_size=batch_size,      # <-- UPDATED
+            shuffle=False,
+            num_workers=self.num_workers,
+            pin_memory=True,
+            persistent_workers=self.num_workers > 0,
         )
  
         print(f"  train={len(train_loader)} batches  "
