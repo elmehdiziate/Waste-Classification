@@ -461,7 +461,7 @@ class WaRPPreprocessor:
         # Pretrained ResNet: sampler ON (rho=59.67 needs it), minority aug ON,
         # no mixup (not standard in original ResNet training recipe)
  
-        "efficientnet":  (True,    True,    False,  "pretrained_cnn"),
+        "efficientnet":  (False,    False,    False,  "cnn"),
         # EfficientNet benefits from MixUp — Tan & Le (2019) used it
  
         "swin":          (True,    True,    True,  "transformer"),
