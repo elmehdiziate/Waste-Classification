@@ -82,11 +82,12 @@ RET 01, Apr 20, RetinaNet, Notebook Baseline, 20ep+flip only, LR=1e‑4, ~37–3
 RET 02, Apr 21, RetinaNet, Notebook Optimised, 40ep+StepLR, LR=1e‑4, ~20%, Overfitting
 RET 03, Apr 22, RetinaNet, Eval Fix, dtype+IoU fixes,:, stable, Correct evaluator
 RET 04, Apr 23, RetinaNet, Best‑epoch‑by‑mAP, 20ep, LR=1e‑4, ↑ mAP, Best notebook config
+CLS 05, Apr 23, ResNet50,Optimised V9 224px,224px CosineLR,LR=1e-4 dropout0.4,80.21% acc 78.11% macroF1,Final clean re-run
 RET 05, Apr 24, RetinaNet, Final Notebook, flip‑only + 20ep, LR=1e‑4, competitive, Final RetinaNet attempt
 
 CLS 03,Apr 25,ResNet50,Baseline 224px,224px no-MixUp,LR=1e-4 dropout0.4,72.92% acc 72.45% macroF1,Final clean re-run
-CLS 04,Apr 25,ResNet50,Optimal 224px,224px CosineLR,LR=1e-4 dropout0.4,80.66% acc 77.10% macroF1,Final clean re-run
 CLS 01,Apr 25,ConvNeXt,Baseline 224px Final,224px MixUp ,LR=1e-4 dropout0.4 HD1,82.85 accuracy 80.87 macroF1,Final clean baseline re-run
 CLS 02,Apr 25,ConvNeXt,Optimised V6 224px,EMA+AMP+MixUp/CutMix+Erasing+LS,LR=1e-4 dropout0.4 HD2,85.43% acc 83.30% macroF1,Final clean re-run
 DET 01,Apr 25,RetinaNet,Baseline WaRP-D,40ep AdamW 224px full-image,LR=1e-4,43.42% mAP@0.5,Final clean re-run
 DET 02,Apr 25,RetinaNet,Optimised Flip-Only 20ep,20ep flip-only full-image,LR=1e-4,22.98% mAP@0.5,Final clean re-run
+
