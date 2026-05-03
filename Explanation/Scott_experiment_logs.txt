@@ -111,16 +111,23 @@ DET 02	| Apr 25	| RetinaNet	        | Optimised Flip-Only 20ep	| 20ep flip-only 
 
 WEEK 5: Apr 27 to May 3 (SegFormer & Mask2Former Experiments)
 ID      | Date     | Model              | Experiment                | Settings                          | Hyperparams               | Result                            | Notes
-M2F 01  | May 24   | Mask2Former        | v1 Baseline               | HF default config                 | LR=3e-4 80ep              | ~0.02–0.04 mIoU                   | Failed to learn; GT mismatch
-M2F 02  | May 24   | Mask2Former        | v2 Improved Loader        | Corrected mask pipeline           | LR=3e-4 80ep              | ~0.05–0.07 mIoU                   | Still unstable; class collapse
-M2F 03  | May 25   | Mask2Former        | v3 Final Attempt          | Full pipeline fix + resizing      | LR=3e-4 80ep              | ~0.10–0.12 mIoU                   | Not viable for WaRP‑S
+M2F 01  | Apr 27   | Mask2Former        | v1 Baseline               | HF default config                 | LR=3e-4 80ep              | ~0.02–0.04 mIoU                   | Failed to learn; GT mismatch
+M2F 02  | Apr 27   | Mask2Former        | v2 Improved Loader        | Corrected mask pipeline           | LR=3e-4 80ep              | ~0.05–0.07 mIoU                   | Still unstable; class collapse
+M2F 03  | Apr 27   | Mask2Former        | v3 Final Attempt          | Full pipeline fix + resizing      | LR=3e-4 80ep              | ~0.10–0.12 mIoU                   | Not viable for WaRP‑S
 
-SEG 01  | May 25   | SegFormer‑B1       | Baseline                  | Custom PyTorch impl               | LR=3e-4 80ep              | ~0.32–0.36 mIoU                   | First working version
-SEG 02  | May 25   | SegFormer‑B1       | Optimised v1              | Strong augs, no smoothing         | LR=3e-4 80ep              | ~0.41–0.44 mIoU                   | Clear improvement
-SEG 03  | May 26   | SegFormer‑B1       | Optimised v2              | Augs + LS=0.02                    | LR=3e-4 80ep              | 0.466 mIoU                        | Best custom PyTorch version
-SEG 04  | May 26   | SegFormer‑B1       | Optimised v3              | Augs + LS + EMA                   | LR=3e-4 80ep              | ~0.07 mIoU                        | EMA destabilised training
+SEG 01  | Apr 27   | SegFormer‑B1       | Baseline                  | Custom PyTorch impl               | LR=3e-4 80ep              | ~0.32–0.36 mIoU                   | First working version
+SEG 02  | Apr 27   | SegFormer‑B1       | Optimised v1              | Strong augs, no smoothing         | LR=3e-4 80ep              | ~0.41–0.44 mIoU                   | Clear improvement
+SEG 03  | Apr 27   | SegFormer‑B1       | Optimised v2              | Augs + LS=0.02                    | LR=3e-4 80ep              | 0.466 mIoU                        | Best custom PyTorch version
+SEG 04  | Apr 27   | SegFormer‑B1       | Optimised v3              | Augs + LS + EMA                   | LR=3e-4 80ep              | ~0.07 mIoU                        | EMA destabilised training
 
-HF 01   | May 26   | SegFormer‑B1 (HF)  | v1 Baseline               | HF pretrained ADE → WaRP‑S        | LR=3e-4 80ep              | 0.860 mIoU                        | Excellent; stable
-HF 02   | May 26   | SegFormer‑B1 (HF)  | v2 LS=0.02                | Label smoothing only              | LR=3e-4 80ep              | 0.816 mIoU                        | Slight drop vs v1
-HF 03   | May 27   | SegFormer‑B1 (HF)  | v3 LS+EMA                 | LS=0.02 + EMA                     | LR=3e-4 80ep              | 0.784 mIoU                        | EMA again harmful
+HF 01   | Apr 27   | SegFormer‑B1 (HF)  | v1 Baseline               | HF pretrained ADE → WaRP‑S        | LR=3e-4 80ep              | 0.860 mIoU                        	| Excellent; stable
+HF 02   | Apr 27   | SegFormer‑B1 (HF)  | v2 LS=0.02                | Label smoothing only              | LR=3e-4 80ep              | 0.816 mIoU                        | Slight drop vs v1
+HF 03   | Apr 27   | SegFormer‑B1 (HF)  | v3 LS+EMA                 | LS=0.02 + EMA                     | LR=3e-4 80ep              | 0.784 mIoU                        | EMA again harmful
+
+RNT 01	| May 03   | ResNet50	        | Optimal 224px				| 224px CosineLR					| LR=1e-4 dropout0.4	    | 80.21% acc 78.11% macroF1			| clean re-run
+RNT 02	| May 03   | ResNet50 	        | Notebook Baseline 224px 	| 224px                    			| LR=1e‑4      		        | 74.53% acc/74.06%	macroF1   		| clean re-run
+CLS 01	| May 03   | ConvNeXt	        | Baseline 224px Final		| 224px MixUp 						| LR=1e-4 dropout0.4 HD1	| 82.85 accuracy/80.87 macroF1	    | clean re-run
+CLS 02	| May 03   | ConvNeXt	        | Optimised V6 224px		| EMA+AMP+MixUp/CutMix+Erasing+LS	| LR=1e-4 dropout0.4 HD2	| 85.43% acc/83.30% macroF1		    | clean re-run
+DET 01	| May 03   | RetinaNet	        | Baseline WaRP-D			| 40ep AdamW 224px full-image		| LR=1e-4			        | 45.18% mAP@0.5/39.3% mAP@0.75     | clean re-run
+SEG 05  | May 03   | SegFormer‑B1       | Optimised v1              | Strong augs, no smoothing         | LR=3e-4 80ep              | 0.868 mIoU/95.39mAP@0.5           | Clear re-run
 
