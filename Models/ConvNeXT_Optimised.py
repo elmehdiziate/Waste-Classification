@@ -6,10 +6,10 @@ Author: Scott Lewis
 ConvNeXt-Base fine-tuned for 28-class WaRP-C classification.
 
 Key points:
-- Backbone: torchvision ConvNeXt-Base (IMAGENET1K_V1), unchanged
-- Head: LayerNorm + MLP classifier with configurable depth
-- Default: freeze_backbone=False (full fine-tuning)
-- Added: get_param_groups() for optional differential LR
+1. Backbone: torchvision ConvNeXt-Base (IMAGENET1K_V1), unchanged
+2. Head: LayerNorm + MLP classifier with configurable depth
+3. Default: freeze_backbone=False (full fine-tuning)
+4. Added: get_param_groups() for optional differential LR
 """
 
 import torch
@@ -33,89 +33,89 @@ class ConvNeXT_OptimisedV2(nn.Module):
         self.head_depth      = head_depth
         self.model_name      = "ConvNeXt-Base (Optimised V2)"
 
-        # ---------------------------------------------------------
-        # 1. Load pretrained ConvNeXt-Base backbone
-        # ---------------------------------------------------------
-        backbone = models.convnext_base(
-            weights=models.ConvNeXt_Base_Weights.IMAGENET1K_V1
-        )
+        # load pretrained convnext-Base backbone. 
+        # (IMAGENET1K_V1 weights provide strong transfer performance).
+        backbone = models.convnext_base(weights=models.ConvNeXt_Base_Weights.IMAGENET1K_V1)
 
         # ConvNeXt backbone: features + global avgpool
-        self.CN_backbone = nn.Sequential(
-            backbone.features,
-            backbone.avgpool,   # (B, 1024, 1, 1)
-        )
+        # extract the number of features output by the ConvNeXt classifier.
+        # note: convnext-base outputs a 1024-dim feature convnext after avgpool).        
+        self.CN_backbone = nn.Sequential(backbone.features, backbone.avgpool) # (B, 1024, 1, 1)
 
+        # number of features produced by convnext-Base (1024)
         self.in_features = backbone.classifier[2].in_features  # 1024
 
-        # Optional freezing
+        # freeze or unfreeze backbone parameters
+        # phase 1: freeze_backbone=True for head-only training.
+        # phase 2: freeze_backbone=False for full fine-tuning.
+        # batch-norm-safe behaviour:
+        # .eval() prevents BN from updating running stats when frozen
+        # .train() re-enables BN adaptation when unfreezing     
         if freeze_backbone:
             self.freeze_backbone()
         else:
             self.unfreeze_backbone()
 
-        # ---------------------------------------------------------
-        # 2. Classification head (MLP with configurable depth)
-        # ---------------------------------------------------------
-        # Optionally scale dropout with head depth (mild regularisation)
+        # build the classifier head.
+        # vs. baseline, this version:
+        # 1. allows deeper MLPs (head_depth > 1)
+        # 2. scales dropout with head depth (mild regularisation)
+        # 3. & adds a final LayerNorm before the logit
+
+        # Increase dropout slightly for deeper heads 
         effective_dropout = self.dropout + 0.1 * max(0, self.head_depth - 1)
 
         layers = [
-            nn.Flatten(),                      # (B,1024,1,1) → (B,1024)
-            nn.LayerNorm(self.in_features),    # stabilises features
-            nn.Dropout(p=effective_dropout),
+            nn.Flatten(),                       # (B,1024,1,1) -> (B,1024)
+            nn.LayerNorm(self.in_features),     # stabilises convnext features
+            nn.Dropout(p=effective_dropout),    # regularisation
         ]
 
-        # Hidden layers: (Linear → GELU → Dropout) × (head_depth - 1)
+        # add hidden layers: (Linear -> GELU -> Dropout) × (head_depth - 1)
+        # GELU is smoother than ReLU and matches convnext's internal design
         for _ in range(self.head_depth - 1):
             layers.append(nn.Linear(self.in_features, self.in_features))
             layers.append(nn.GELU())
             layers.append(nn.Dropout(p=effective_dropout))
 
-        # Final normalisation + projection to logits
-        layers.append(nn.LayerNorm(self.in_features))
-        layers.append(nn.Linear(self.in_features, self.num_classes))
+        # final normalisation & projection to logits.
+        # note: layernorm before the final Linear improves stability.
+        layers.append(nn.LayerNorm(self.in_features))                  
+        layers.append(nn.Linear(self.in_features, self.num_classes))    
 
         self.classifier = nn.Sequential(*layers)
 
-    # ---------------------------------------------------------
-    # Forward
-    # ---------------------------------------------------------
+    # forward pass: extract convnext features & pass through MLP classifier head
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        features = self.CN_backbone(x)   # (B, 1024, 1, 1)
-        logits   = self.classifier(features)
+        features = self.CN_backbone(x)          # extract convnext features (B, 1024, 1, 1)
+        logits   = self.classifier(features)    # pass through mlp classifier head
         return logits
 
-    # ---------------------------------------------------------
-    # Backbone freeze / unfreeze
-    # ---------------------------------------------------------
+    # freeze backbone parameters & set BN layers to eval mode.
+    # prevents batchnorm from updating running stats during Phase 1.    
     def freeze_backbone(self):
         for p in self.CN_backbone.parameters():
             p.requires_grad = False
         self.CN_backbone.eval()
 
+    # unfreeze backbone parameters & set BN layers to train mode.
+    # allows BN to adapt to warp-c during Phase 2 fine-tuning.
     def unfreeze_backbone(self):
         for p in self.CN_backbone.parameters():
             p.requires_grad = True
         self.CN_backbone.train()
 
-    # ---------------------------------------------------------
-    # Differential LR support (optional)
-    # ---------------------------------------------------------
+    # support for differential learning rate:
+    # backbone_lr: small LR for pretrained backbone
+    # head_lr: larger LR for randomly initialised classifier
+    # (used by optimisers like AdamW)
     def get_param_groups(self, head_lr: float, backbone_lr: float):
-        """
-        Returns parameter groups for optimisers like AdamW:
-        - backbone: lower LR
-        - head: higher LR
-        """
         return [
             {"params": self.CN_backbone.parameters(), "lr": backbone_lr},
             {"params": self.classifier.parameters(),  "lr": head_lr},
         ]
 
-    # ---------------------------------------------------------
-    # Parameter counts (for reporting)
-    # ---------------------------------------------------------
+    # return parameter counts for reporting
     def get_parameter_counts(self) -> dict:
         total = sum(p.numel() for p in self.parameters())
         trainable = sum(p.numel() for p in self.parameters() if p.requires_grad)
@@ -127,6 +127,7 @@ class ConvNeXT_OptimisedV2(nn.Module):
             "trainable_M": round(trainable / 1e6, 2),
         }
 
+    # print the model summary (for debugging/logging).
     def __repr__(self) -> str:
         c = self.get_parameter_counts()
         return (
