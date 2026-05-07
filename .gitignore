@@ -9,4 +9,5 @@ __pycache__/
 .ipynb_checkpoints/
 *.pth          # model weights (also large)
 *.pt
+Models/weights/
 runs/          # training logs
