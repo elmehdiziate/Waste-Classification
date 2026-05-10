@@ -1,4 +1,3 @@
-# ======================== Models/ConvNeXT.py ============================
 '''
 Date: 28/03/2026
 Author: Scott Lewis
@@ -12,7 +11,6 @@ Key design notes:
 3. Default head_depth=1 matches the canonical ConvNeXt classifier.
 4. Deeper heads (head_depth>1) help adapt to domain shift on small datasets.
 
-Original paper: https://arxiv.org/abs/2201.03545
 '''
 
 import torch
@@ -59,7 +57,7 @@ class ConvNeXT(nn.Module):
                 parameter.requires_grad = False
 
         # builds the classifier head.
-        # canonical convnext head == Flatten -> LayerNorm -> Dropout -> Linear(1024→num_classes)
+        # canonical convnext head == Flatten -> LayerNorm -> Dropout -> Linear(1024->num_classes)
         # this head generalises canonical with head_depth:
         # head_depth = 1 == canonical head 
         # head_depth > 1 == deeper MLP with GELU activations
@@ -125,7 +123,7 @@ class ConvNeXT(nn.Module):
             f"  total params    : {counts['total_M']}M\n"
             f"  trainable params: {counts['trainable_M']}M\n"
             f"  backbone        : ConvNeXt-Base (ImageNet-1k V1)\n"
-            f"  head            : LayerNorm → Dropout → "
-            f"{'(Linear→GELU→Dropout)×' + str(self.head_depth - 1) + ' → ' if self.head_depth > 1 else ''}"
-            f"Linear({self.in_features}→{self.num_classes})"
+            f"  head            : LayerNorm -> Dropout -> "
+            f"{'(Linear->GELU->Dropout)×' + str(self.head_depth - 1) + ' -> ' if self.head_depth > 1 else ''}"
+            f"Linear({self.in_features}->{self.num_classes})"
         )

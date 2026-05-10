@@ -8,7 +8,7 @@ import torch.nn as nn
 
 class ConvBlock(nn.Module):
     """
-    One convolutional block:  Conv → BatchNorm → ReLU → MaxPool
+    One convolutional block:  Conv -> BatchNorm -> ReLU -> MaxPool
 
     This is the fundamental building unit. Every block:
       - Learns features at the current spatial scale (Conv)
@@ -16,8 +16,8 @@ class ConvBlock(nn.Module):
       - Introduces non-linearity (ReLU)
       - Halves the spatial dimensions (MaxPool 2×2)
 
-    Parameters
-    ----------
+    Parameters:
+    
     in_channels  : number of input feature maps
     out_channels : number of output feature maps (filters to learn)
     """
@@ -31,7 +31,7 @@ class ConvBlock(nn.Module):
             # bias=False because BatchNorm has its own learnable bias (beta)
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
-            # halves H and W: 224→112→56→28→14 across 4 blocks
+            # halves H and W: 224->112->56->28->14 across 4 blocks
             nn.MaxPool2d(kernel_size=2, stride=2),
         )
 
@@ -43,17 +43,17 @@ class CNNModel(nn.Module):
     """
     Input:  (B, 3, 224, 224)
 
-    Block 1: Conv(3→32)   + BN + ReLU + MaxPool  → (B, 32,  112, 112)
-    Block 2: Conv(32→64)  + BN + ReLU + MaxPool  → (B, 64,   56,  56)
-    Block 3: Conv(64→128) + BN + ReLU + MaxPool  → (B, 128,  28,  28)
-    Block 4: Conv(128→256)+ BN + ReLU + MaxPool  → (B, 256,  14,  14)
+    Block 1: Conv(3->32)   + BN + ReLU + MaxPool  -> (B, 32,  112, 112)
+    Block 2: Conv(32->64)  + BN + ReLU + MaxPool  ->(B, 64,   56,  56)
+    Block 3: Conv(64->128) + BN + ReLU + MaxPool  ->(B, 128,  28,  28)
+    Block 4: Conv(128->256)+ BN + ReLU + MaxPool  ->(B, 256,  14,  14)
 
-    GAP:     AdaptiveAvgPool2d(1)                → (B, 256,   1,   1)
-    Flatten:                                     → (B, 256)
+    GAP:     AdaptiveAvgPool2d(1)                ->(B, 256,   1,   1)
+    Flatten:                                     ->(B, 256)
     Dropout: p=0.5
-    FC:      Linear(256 → 128) + ReLU
+    FC:      Linear(256 -> 128) + ReLU
     Dropout: p=0.3
-    Output:  Linear(128 → num_classes)           → (B, 28)
+    Output:  Linear(128 -> num_classes)          -> (B, 28)
 
     Parameters
     ----------
@@ -66,20 +66,20 @@ class CNNModel(nn.Module):
 
         self.num_classes = num_classes
 
-        # Channel progression 3 → 32 → 64 → 128 → 256
-        # Doubles channels each block — standard VGG-style progression
+        # Channel progression 3 -> 32 -> 64 -> 128 -> 256
+        # Doubles channels each block: standard VGG-style progression
         self.features = nn.Sequential(
-            ConvBlock(3,   32),    # block 1: RGB → 32 feature maps
-            ConvBlock(32,  64),    # block 2: 32  → 64 feature maps
-            ConvBlock(64,  128),   # block 3: 64  → 128 feature maps
-            ConvBlock(128, 256),   # block 4: 128 → 256 feature maps
+            ConvBlock(3,   32),    # block 1: RGB -> 32 feature maps
+            ConvBlock(32,  64),    # block 2: 32  -> 64 feature maps
+            ConvBlock(64,  128),   # block 3: 64  -> 128 feature maps
+            ConvBlock(128, 256),   # block 4: 128 -> 256 feature maps
         )
 
         # Collapses each 14×14 feature map to a single number.
-        # Output: (B, 256, 1, 1) → flatten to (B, 256)
+        # Output: (B, 256, 1, 1) -> flatten to (B, 256)
         self.gap = nn.AdaptiveAvgPool2d(1)
 
-        # ── Classifier head ───────────────────────────────────────────────
+        # Classifier head 
         self.classifier = nn.Sequential(
             nn.Dropout(p=dropout_p),        # dropout before first FC
             nn.Linear(256, 128),
@@ -109,13 +109,13 @@ class CNNModel(nn.Module):
         """
         Forward pass.
 
-        Parameters
-        ----------
+        Parameters:
+        
         x : (B, 3, 224, 224) normalised image tensor
 
-        Returns
-        -------
-        logits : (B, num_classes) — raw scores before softmax
+        Returns:
+        
+        logits : (B, num_classes): those are the raw scores before softmax
         """
         x = self.features(x)   # (B, 256, 14, 14)
         x = self.gap(x)        # (B, 256,  1,  1)

@@ -1,4 +1,3 @@
-# ======================== Models/ResNet50_Optimised.py ============================
 """
 ResNet50_Optimised (V8)
 -----------------------
@@ -35,7 +34,7 @@ class ResNet50_Optimised(nn.Module):
         backbone = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V2)
 
         # extract the backbone excatly as defined by torchvision:
-        # conv1 → bn1 → relu → maxpool → layer1–4 → avgpool
+        # conv1 -> bn1 -> relu -> maxpool -> layer1–4 -> avgpool
         # output shape remains (B, 2048, 1, 1).
         self.backbone = nn.Sequential(*list(backbone.children())[:-1])
 
@@ -43,8 +42,8 @@ class ResNet50_Optimised(nn.Module):
         self.in_features = backbone.fc.in_features  # 2048
 
         # freeze or unfreeze backbone parameters
-        # phase 1: freeze backbone → train classifier only
-        # phase 2: unfreeze backbone → full fine-tuning
+        # phase 1: freeze backbone -> train classifier only
+        # phase 2: unfreeze backbone -> full fine-tuning
         # this is because batchnorm layers require special handling:
         # .eval() stops BN from updating running stats when frozen
         # .train() re-enables BN adaptation when unfreezing        
@@ -114,5 +113,5 @@ class ResNet50_Optimised(nn.Module):
             f"  total params    : {c['total_M']}M\n"
             f"  trainable params: {c['trainable_M']}M\n"
             f"  backbone        : ResNet-50 (ImageNet-1k V2)\n"
-            f"  head            : Linear({self.in_features}→512) → ReLU → Dropout → Linear(512→{self.num_classes})"
+            f"  head            : Linear({self.in_features}->512) -> ReLU -> Dropout -> Linear(512->{self.num_classes})"
         )

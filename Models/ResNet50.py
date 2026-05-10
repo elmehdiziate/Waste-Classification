@@ -8,7 +8,7 @@ ResNet50 fine-tuned for 28-class Warp-C classification.
 Design rationale:
 1. Use ImageNet-pretrained ResNet-50 as backbone (strong transfer learning baseline)
 2. Remove the final FC layer and replace with a lightweight bottleneck head
-3. Bottleneck (2048→512) stabilises transfer to small dataset (8,823 images)
+3. Bottleneck (2048->512) stabilises transfer to small dataset (8,823 images)
 4. ReLU after Linear (correct placement)
 5. Dropout after activation (standard for regularisation)
 
@@ -96,5 +96,5 @@ class ResNet50(nn.Module):
             f"  total params    : {counts['total_M']}M\n"
             f"  trainable params: {counts['trainable_M']}M\n"
             f"  backbone        : ResNet-50 (ImageNet-1k V2)\n"
-            f"  head            : Linear({self.in_features}→512) → ReLU → Dropout → Linear(512→{self.num_classes})"
+            f"  head            : Linear({self.in_features}->512) -> ReLU -> Dropout -> Linear(512->{self.num_classes})"
         )

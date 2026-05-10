@@ -6,55 +6,6 @@ to implement a range of open-vocabulary methods, from pure CLIP zero-shot to hyb
 with LLaVA, and compare them all in one place. I want to see if using my own fine-tuned 
 Swin features for retrieval can give LLaVA better context than CLIP's often wrong guesses.
 -----------------
-WHY OPEN VOCABULARY?
---------------------
-All fine-tuned classifiers (Swin, ViT, MobileViT) output exactly 28 fixed
-labels. Open-vocabulary models break this constraint by grounding vision in
-language because they can understand descriptions, not just memorised label indices.
-
-This module implements SEVEN complementary methods:
-
-    Clip:
-    1. CLIPClassifier: it uses zero-shot text-image cosine similarity
-    2. CLIPPrototypeClassifier: it uses image-image cosine similarity using train set centroids (no text at all : pure visual RAG)
-    3. CLIPkNNClassifier: it uses k-nearest-neighbour over all train embeddings with optional label-weighted voting
-
-    LLAVA-BASED
-    4. LLaVAClassifier: it uses four prompting modes: zero_shot, one_shot, few_shot, open_vocab
-    5. CascadeVLMClassifier: it uses CLIP to filter top-K candidates ranked by probability and LLaVA only handles uncertain cases this is based on a paper(Wei et al. EMNLP Findings 2024)
-
-    HYBRID (Swin/MobileViT + LLaVA)
-    6. HybridClassifier        here I have used my trained Swin model (we can use the best model for now swin is the best) to  extracts features
-                               the I have used kNN on those features to find nearest train images after that LLaVA sees those images as context
-    7. EnsembleClassifier      soft-vote ensemble: CLIP probs + Swin logits weighted sum and the took the best of both worlds
-
-RAG IMPLEMENTATIONS COMPARED
------------------------------
-  CLIPPrototypeClassifier:
-    - Compute one mean embedding per class (centroid) from all train images
-    - Classify by nearest centroid
-    - Cleaner than kNN : one comparison per class, not per image
-    - Based on: Snell et al. (2017) Prototypical Networks
-
-  CLIPkNNClassifier:
-    - Build (N, D) embedding index over all 8767 train images
-    - At query time: cosine similarity → top-K neighbours → majority vote
-    - Label-weighted: weight each vote by similarity score
-    - Better than prototype for multi-modal distributions
-
-  HybridClassifier :
-    - Use the fine-tuned Swin backbone as feature extractor
-    - These features ARE trained on WaRP-C implies much better than CLIP features
-    - Build kNN index in Swin feature space (768-dim) instead of CLIP space
-    - Retrieve closest training images and the pass to LLaVA as context
-    - LLaVA now sees genuinely relevant examples, not CLIP's wrong guesses
-
-REFERENCES
-----------
-Radford et al. (2021) CLIP. ICML 2021. https://arxiv.org/abs/2103.00020
-Liu et al. (2023) LLaVA. NeurIPS 2023. https://arxiv.org/abs/2304.10592
-Wei et al. (2024) CascadeVLM. EMNLP Findings 2024. arxiv:2405.11301
-Snell et al. (2017) Prototypical Networks. NeurIPS 2017. arxiv:1703.05175
 """
 
 import base64
@@ -121,7 +72,7 @@ WARP_CLASS_DESCRIPTIONS: dict[str, str] = {
 
 
 
-#  SHARED INDEX — reused across multiple classifiers
+#  SHARED INDEX FOR CLIP PROTOTYPE & KNN METHODS
 class EmbeddingIndex:
     """
     Shared embedding index: (N, D) matrix + parallel paths + labels.
@@ -153,17 +104,6 @@ class EmbeddingIndex:
     def query(self, feat: torch.Tensor, k: int = 5):
         """
         Find k nearest neighbours by cosine similarity.
-
-        Parameters
-        ----------
-        feat : (1, D) or (D,) normalised query embedding
-        k    : number of neighbours
-
-        Returns
-        -------
-        indices    : (k,) tensor of row indices into self.embeddings
-        sims       : (k,) tensor of cosine similarities
-        neighbour_labels : list of k class name strings
         """
         if feat.dim() == 1:
             feat = feat.unsqueeze(0)
@@ -176,10 +116,6 @@ class EmbeddingIndex:
     def get_prototypes(self) -> torch.Tensor:
         """
         Compute per-class mean embedding (prototype).
-
-        Returns
-        -------
-        prototypes : (C, D) normalised tensor, row i = class i prototype
         """
         C = len(self.class_names)
         D = self.embeddings.shape[1]
@@ -203,12 +139,6 @@ class EmbeddingIndex:
     ) -> "EmbeddingIndex":
         """
         Build EmbeddingIndex using CLIP ViT-B/32 visual encoder.
-
-        Parameters
-        ----------
-        clip_model   : CLIPClassifier instance
-        train_loader : DataLoader (dataset.samples used)
-        save_path    : optional .pt path to save/reload
         """
         if save_path and Path(save_path).exists():
             print(f"[EmbeddingIndex] Loading CLIP index from {save_path}")
@@ -249,7 +179,7 @@ class EmbeddingIndex:
                 "labels":      index.labels,
                 "class_names": index.class_names,
             }, save_path)
-            print(f"  Saved → {save_path}")
+            print(f"  Saved -> {save_path}")
 
         return index
 
@@ -262,19 +192,7 @@ class EmbeddingIndex:
         verbose:   bool = True,
     ) -> "EmbeddingIndex":
         """
-        Build EmbeddingIndex using your fine-tuned Swin backbone.
-
-        WHY THIS IS BETTER THAN CLIP:
-        Swin was trained on WaRP-C → its features discriminate exactly
-        the 28 waste classes. CLIP features were trained on internet images
-        and struggle with industrial conveyor belt shots.
-
-        Extracts 768-dim features from swin_model.backbone (before head).
-
-        Parameters
-        ----------
-        swin_model   : SwinTransformerWaRP instance (fine-tuned, eval mode)
-        train_loader : DataLoader
+        Build EmbeddingIndex using the fine-tuned Swin backbone.
         """
         import torchvision.transforms as T
         from Pipeline_.preprocessor import PadToSquare
@@ -330,7 +248,7 @@ class EmbeddingIndex:
                 "labels":      index.labels,
                 "class_names": index.class_names,
             }, save_path)
-            print(f"  Saved → {save_path}")
+            print(f"  Saved -> {save_path}")
 
         return index
 
@@ -341,10 +259,8 @@ class CLIPClassifier:
     """
     Method 1: Zero-shot classification via CLIP text-image similarity.
 
-    Encodes 28 text descriptions → computes cosine similarity with query image.
+    Encodes 28 text descriptions -> computes cosine similarity with query image.
     Also used as the visual encoder for all other methods.
-
-    Reference: Radford et al. (2021) ICML. https://arxiv.org/abs/2103.00020
     """
 
     def __init__(
@@ -380,7 +296,7 @@ class CLIPClassifier:
         return f  # (28, D)
 
     def encode_image(self, img: Image.Image) -> torch.Tensor:
-        """Encode PIL image → (1, D) normalised CLIP embedding."""
+        """Encode PIL image -> (1, D) normalised CLIP embedding."""
         x = self.preprocess(img).unsqueeze(0).to(self.device)
         with torch.no_grad():
             f = F.normalize(self.model.encode_image(x), dim=-1)
@@ -432,13 +348,6 @@ class CLIPPrototypeClassifier:
 
     Compute one mean embedding per class (prototype) from all training images.
     Classify by cosine similarity to nearest prototype.
-
-    WHY BETTER THAN TEXT-BASED CLIP:
-    Uses actual training image distributions, not text descriptions.
-    Avoids the domain gap between internet captions and WaRP-C imagery.
-
-    Reference: Snell et al. (2017) Prototypical Networks for Few-shot
-    Learning. NeurIPS 2017. https://arxiv.org/abs/1703.05175
     """
 
     def __init__(self, clip_model: CLIPClassifier, index: EmbeddingIndex):
@@ -481,18 +390,6 @@ class CLIPPrototypeClassifier:
 class CLIPkNNClassifier:
     """
     Method 3: k-Nearest-Neighbour classification in CLIP embedding space.
-
-    Build (N, D) index of all 8767 training images with CLIP embeddings.
-    Classify query by majority vote of k nearest neighbours, weighted by
-    cosine similarity score.
-
-    WHY WEIGHTED VOTE:
-    A neighbour with similarity 0.95 should outweigh one with 0.60.
-    Simple majority vote treats all neighbours equally — worse performance.
-
-    Parameters
-    ----------
-    k : number of neighbours (default 7 — odd to avoid ties)
     """
 
     def __init__(self, clip_model: CLIPClassifier, index: EmbeddingIndex,
@@ -545,7 +442,7 @@ LLAVA_SYSTEM = (
 )
 
 def _encode_image_b64(img: Image.Image, size: int = 336) -> str:
-    """Pad to square → resize → base64 JPEG for Ollama API."""
+    """Pad to square -> resize -> base64 JPEG for Ollama API."""
     w, h   = img.size
     side   = max(w, h)
     canvas = Image.new("RGB", (side, side), (128, 128, 128))
@@ -577,7 +474,7 @@ def _call_ollama(
     return r.json()["message"]["content"].strip()
 
 def _parse_to_class(response: str, class_names: list[str]) -> Optional[int]:
-    """Parse LLaVA response → class index. Handles ANSWER:/CLASSIFICATION: tags."""
+    """Parse LLaVA response -> class index. Handles ANSWER:/CLASSIFICATION: tags."""
     clean = response.lower().strip()
     for tag in ["answer:", "classification:"]:
         if tag in clean:
@@ -606,11 +503,6 @@ def _parse_to_class(response: str, class_names: list[str]) -> Optional[int]:
 class LLaVAClassifier:
     """
     Method 4: LLaVA-13b with four prompting strategies.
-
-    Uses the correct LLaVA-1.5 system prompt format from HuggingFace docs.
-    All four modes use the /api/chat endpoint with system + user roles.
-
-    Modes: zero_shot | one_shot | few_shot | open_vocab (CoT)
     """
 
     ZERO_SHOT_USER = (
@@ -731,28 +623,17 @@ class LLaVAClassifier:
             m = (" ✓" if pname==true_label else f" ✗ (true:{true_label})") \
                 if true_label else ""
             if mode == "open_vocab":
-                print(f"\n  [open_vocab]\n  {resp}\n  → {pname}{m}")
+                print(f"\n  [open_vocab]\n  {resp}\n  -> {pname}{m}")
             else:
-                print(f"\n  [{mode}] \"{resp}\" → {pname}{m}")
+                print(f"\n  [{mode}] \"{resp}\" -> {pname}{m}")
         return pred, resp
 
 
-#  METHOD 5: CascadeVLM (CLIP entropy → LLaVA on top-K)
+#  METHOD 5: CascadeVLM (CLIP entropy -> LLaVA on top-K)
 
 class CascadeVLMClassifier:
     """
-    Method 5: CascadeVLM — CLIP filters candidates, LLaVA handles hard cases.
-
-    Algorithm:
-      1. CLIP classifies → top-K candidates sorted by probability
-      2. Compute Shannon entropy of CLIP's distribution
-         - H ≤ threshold → CLIP is confident → return CLIP answer (no LLaVA)
-         - H > threshold → CLIP is uncertain → ask LLaVA to pick from top-K
-      3. LLaVA sees only K candidates IN CLIP'S RANKED ORDER
-         (ordering is critical: +33.9% accuracy per paper vs random order)
-
-    Key insight: never show LLaVA all 28 classes — it anchors on early ones.
-    Show only CLIP's top-K, already ranked. LLaVA's job is to refine CLIP.
+    Method 5: CascadeVLM: CLIP filters candidates, LLaVA handles hard cases.
 
     Reference: Wei et al. (2024) CascadeVLM. EMNLP Findings 2024.
     https://arxiv.org/abs/2405.11301
@@ -857,23 +738,6 @@ class CascadeVLMClassifier:
 class HybridClassifier:
     """
     Method 6: Fine-tuned Swin/MobileViT features + LLaVA context.
-
-    WHY THIS IS THE KEY CONTRIBUTION:
-    Previous RAG methods used CLIP features (weak on WaRP-C, 19.6% accuracy).
-    This method uses YOUR fine-tuned Swin backbone as the feature extractor.
-    Swin was trained on WaRP-C → its 768-dim features perfectly discriminate
-    the 28 waste classes. kNN in Swin space finds genuinely similar images.
-    LLaVA then gets REAL examples that look like the query.
-
-    Pipeline:
-      1. Extract 768-dim Swin features from query image
-      2. kNN in Swin feature space → top-K most similar training images
-      3. Pass those K images to LLaVA with their ground-truth labels
-      4. LLaVA classifies query given these high-quality visual references
-
-    Modes:
-      'swin_knn'    — Swin kNN classification only (no LLaVA, fast)
-      'swin_llava'  — Swin kNN retrieval → LLaVA classification
     """
 
     HYBRID_USER = (
@@ -936,7 +800,7 @@ class HybridClassifier:
 
     def predict_hybrid(self, img: Image.Image,
                        verbose: bool = False) -> tuple[Optional[int], str]:
-        """Swin-kNN retrieval → LLaVA classification."""
+        """Swin-kNN retrieval -> LLaVA classification."""
         if self.llava is None:
             raise RuntimeError("Pass llava= to use hybrid mode")
 
@@ -968,7 +832,7 @@ class HybridClassifier:
             pred = _parse_to_class(resp, self.class_names)
             if verbose:
                 pname = self.class_names[pred] if pred else "FAIL"
-                print(f"\n  [Hybrid] \"{resp}\" → {pname}")
+                print(f"\n  [Hybrid] \"{resp}\" -> {pname}")
             return pred, resp
         except Exception as e:
             if verbose:
@@ -980,10 +844,6 @@ class HybridClassifier:
                  save_path=None, verbose=True) -> dict:
         """
         Evaluate Hybrid classifier.
-
-        Parameters
-        ----------
-        mode : 'swin_knn' (fast, no LLaVA) or 'swin_llava' (full hybrid)
         """
         dataset = test_loader.dataset
         rng     = np.random.default_rng(42)
@@ -1035,19 +895,6 @@ class HybridClassifier:
 class EnsembleClassifier:
     """
     Method 7: Soft-vote ensemble of fine-tuned Swin + CLIP zero-shot.
-
-    Combines the strengths of both:
-    - Swin: trained on WaRP-C → excellent at fine-grained discrimination
-    - CLIP: trained on 400M pairs → better generalisation and open-vocab
-
-    Soft vote: final_score = α × swin_softmax + (1-α) × clip_softmax
-
-    α=0.8 means trust Swin more (it was trained on WaRP-C).
-    α=0.5 means equal weight.
-
-    This is interesting for the report because it shows how much CLIP
-    adds on top of Swin — likely the ensemble beats Swin alone on
-    classes where CLIP's text understanding helps (cardboard, glass).
     """
 
     def __init__(self, swin_model, clip_model: CLIPClassifier,

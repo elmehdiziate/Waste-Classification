@@ -1,4 +1,3 @@
-# ======================== Models/ConvNeXT_OptimisedV2.py ============================
 """
 Date: 21/04/2026
 Author: Scott Lewis
@@ -138,7 +137,7 @@ class ConvNeXT_OptimisedV2(nn.Module):
             f"  total params    : {c['total_M']}M\n"
             f"  trainable params: {c['trainable_M']}M\n"
             f"  backbone        : ConvNeXt-Base (ImageNet-1k V1)\n"
-            f"  head            : LayerNorm → Dropout → "
-            f"{'(Linear→GELU→Dropout)×' + str(self.head_depth - 1) + ' → ' if self.head_depth > 1 else ''}"
-            f"LayerNorm → Linear({self.in_features}→{self.num_classes})"
+            f"  head            : LayerNorm -> Dropout -> "
+            f"{'(Linear->GELU->Dropout)×' + str(self.head_depth - 1) + ' -> ' if self.head_depth > 1 else ''}"
+            f"LayerNorm -> Linear({self.in_features}->{self.num_classes})"
         )

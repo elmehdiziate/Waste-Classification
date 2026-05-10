@@ -85,7 +85,7 @@ class MobileViT(nn.Module):
             f"  dropout         : {self.dropout}\n"
             f"  total params    : {counts['total_M']}M\n"
             f"  trainable params: {counts['trainable_M']}M\n"
-            f"  architecture    : CNN → Transformer → CNN\n"
+            f"  architecture    : CNN -> Transformer -> CNN\n"
             f"  pretrained      : ImageNet-1K\n"
             f"  waste accuracy  : 98.01% (Yuan et al., 2023)"
         )

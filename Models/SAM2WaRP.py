@@ -1,29 +1,9 @@
 """
 El Mehdi Ziate
-
-WHAT IS SAM 2.1:
-SAM 2 (Ravi et al. 2024) is a foundation model from Meta AI that segments
-any object in images and videos given a prompt (box, point, or mask).
-
-TWO ZERO-SHOT MODES:
-  Detection (WaRP-D):    point prompt → mask → derive bounding box
-  Segmentation (WaRP-S): box prompt   → pixel-level instance mask
-
-LORA FINE-TUNING:
-  SAM 2.1 has 224M parameters. We do not update them all.
-  LoRA (Hu et al. 2022) injects two small trainable matrices A (r×D)
-  and B (D×r) into every attention Q/K/V projection:
-    W_new = W_frozen + B @ A * (alpha / rank)
-  Only ~1-2M parameters are trained instead of 224M (<1% of total).
-  The mask decoder (~4M) is also fine-tuned since it is small.
-
-
-References:
-  Ravi et al. (2024) SAM 2. arXiv:2408.00714
-  Carion et al. (2026) SAM 3. arXiv:2511.16719
-  Hu et al. (2022) LoRA. arXiv:2106.09685
-  SAM2LoRA — arXiv:2510.10288. Achieves SOTA with <5% trainable params.
-  Conv-LoRA — arXiv:2401.17868. LoRA for SAM on specialised domains.
+SAM 2.1 for WaRP-D detection and WaRP-S segmentation.
+Supports:
+    - Zero-shot inference (no training) (4/28/2026)
+    - LoRA fine-tuning on WaRP-S masks (1/5/2026)
 """
 
 import numpy as np
@@ -48,8 +28,8 @@ class LoRALinear(nn.Module):
     Drop-in replacement for nn.Linear with LoRA adaptation.
 
     W_new = W_frozen + (B @ A) * scaling
-    A : (rank, in_features)  — random init * 0.01
-    B : (out_features, rank) — zero init  (LoRA starts as identity)
+    A : (rank, in_features): random init * 0.01
+    B : (out_features, rank): zero init  (LoRA starts as identity)
 
     Scaling = alpha / rank follows the original LoRA paper recommendation.
     """
@@ -73,14 +53,6 @@ class SAM2WaRP:
     Supports:
       - Zero-shot inference (no training)
       - LoRA fine-tuning on WaRP-S masks
-
-    Parameters
-    ----------
-    model_id : HuggingFace model ID
-               'facebook/sam2.1-hiera-large'      224M  best
-               'facebook/sam2.1-hiera-base-plus'   80M  balanced
-               'facebook/sam2.1-hiera-small'        46M  fastest
-    device   : 'cuda' or 'cpu'
     """
 
     def __init__(
@@ -120,17 +92,7 @@ class SAM2WaRP:
         boxes: np.ndarray,
     ) -> tuple[np.ndarray, np.ndarray]:
         """
-        WaRP-S segmentation: given bounding boxes → pixel masks.
-
-        Parameters
-        ----------
-        image : (H, W, 3) uint8 numpy array
-        boxes : (N, 4) float array [x1, y1, x2, y2]
-
-        Returns
-        -------
-        masks  : (N, H, W) bool
-        scores : (N,) float
+        WaRP-S segmentation: given bounding boxes -> pixel masks.
         """
         self._set_image(image)
         boxes_t = torch.tensor(boxes, dtype=torch.float32, device=self.device)
@@ -159,18 +121,7 @@ class SAM2WaRP:
         points: np.ndarray,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
-        WaRP-D detection: given points → bounding boxes (via mask extent).
-
-        Parameters
-        ----------
-        image  : (H, W, 3) uint8 numpy array
-        points : (N, 2) float array [x, y]
-
-        Returns
-        -------
-        boxes  : (N, 4) float [x1, y1, x2, y2]
-        masks  : (N, H, W) bool
-        scores : (N,) float
+        WaRP-D detection: given points -> bounding boxes (via mask extent).
         """
         self._set_image(image)
         all_boxes, all_masks, all_scores = [], [], []
@@ -207,8 +158,7 @@ class SAM2WaRP:
         score_thresh:    float = 0.7,
     ) -> list[dict]:
         """
-        Fully automatic mask generation — no prompts.
-        Returns list of dicts with keys: mask, score, bbox.
+        Fully automatic mask generation: no prompts.
         """
         from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
         gen = SAM2AutomaticMaskGenerator(
@@ -230,16 +180,6 @@ class SAM2WaRP:
     ) -> dict:
         """
         Compute mIoU on WaRP-S using GT box prompts.
-
-        Parameters
-        ----------
-        warp_s_root : path to Warp-S root
-        split_file  : ImageSets/val.txt or test.txt
-        n_samples   : number of images to evaluate
-
-        Returns
-        -------
-        dict: mean_iou, per_instance_iou, total
         """
         warp_s_root = Path(warp_s_root)
         img_dir     = warp_s_root / "JPEGImages"
@@ -301,15 +241,6 @@ class SAM2WaRP:
         Also unfreezes the mask decoder (~4M) for full task adaptation.
 
         Only ~1-2M parameters become trainable (<1% of total).
-
-        Parameters
-        ----------
-        rank  : LoRA rank r. r=16 recommended for domain-specific datasets.
-        alpha : scaling factor. alpha = 2*rank follows LoRA paper convention.
-
-        Reference:
-            SAM2LoRA (arXiv:2510.10288) applies LoRA to both image encoder
-            and mask decoder, achieving SOTA with <5% trainable parameters.
         """
         # Freeze everything
         for param in self.predictor.model.parameters():

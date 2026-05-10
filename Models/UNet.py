@@ -41,18 +41,18 @@ class UNet(nn.Module):
         weights = models.ResNet50_Weights.IMAGENET1K_V1 if pretrained else None
         resnet  = models.resnet50(weights=weights)
 
-        # Stem: conv1 + bn1 + relu → output stride 2
+        # Stem: conv1 + bn1 + relu -> output stride 2
         self.encoder_stem  = nn.Sequential(
             resnet.conv1,   
             resnet.bn1,
             resnet.relu,
         )
-        self.encoder_pool  = resnet.maxpool   # stride 2  → total stride 4
+        self.encoder_pool  = resnet.maxpool   # stride 2  -> total stride 4
 
-        self.encoder1 = resnet.layer1    # 64 → 256,  stride 4  total
-        self.encoder2 = resnet.layer2    # 256 → 512, stride 8  total
-        self.encoder3 = resnet.layer3    # 512 → 1024, stride 16 total
-        self.encoder4 = resnet.layer4    # 1024 → 2048, stride 32 total
+        self.encoder1 = resnet.layer1    # 64 -> 256,  stride 4  total
+        self.encoder2 = resnet.layer2    # 256 -> 512, stride 8  total
+        self.encoder3 = resnet.layer3    # 512 -> 1024, stride 16 total
+        self.encoder4 = resnet.layer4    # 1024 -> 2048, stride 32 total
 
         if freeze:
             self._set_encoder_grad(False)
@@ -70,7 +70,7 @@ class UNet(nn.Module):
 
         self.head = nn.Sequential(
             nn.Dropout2d(p=dropout),
-            nn.Conv2d(64, num_classes, kernel_size=1),   # 64 → num_classes
+            nn.Conv2d(64, num_classes, kernel_size=1),   # 64 -> num_classes
         )
 
     def _set_encoder_grad(self, requires_grad: bool) -> None:
@@ -132,7 +132,7 @@ class UNet(nn.Module):
             f"  trainable params: {counts['trainable_M']}M\n"
             f"  encoder         : ResNet-50 (ImageNet-1k V1)\n"
             f"  decoder         : 4× DecoderBlock (bilinear upsample + skip concat)\n"
-            f"  head            : Dropout2d({self.dropout_p}) → Conv2d(64→{self.num_classes})"
+            f"  head            : Dropout2d({self.dropout_p}) -> Conv2d(64->{self.num_classes})"
         )
 
 import torch
@@ -193,19 +193,19 @@ class UNet(nn.Module):
         weights = models.ResNet50_Weights.IMAGENET1K_V1 if pretrained else None
         resnet  = models.resnet50(weights=weights)
 
-        # Stem: conv1 + bn1 + relu → output stride 2
+        # Stem: conv1 + bn1 + relu -> output stride 2
         self.encoder_stem  = nn.Sequential(
-            resnet.conv1,    # 3 → 64, stride 2
+            resnet.conv1,    # 3 -> 64, stride 2
             resnet.bn1,
             resnet.relu,
         )
-        self.encoder_pool  = resnet.maxpool   # stride 2  → total stride 4
+        self.encoder_pool  = resnet.maxpool   # stride 2  -> total stride 4
 
         # Four residual stages — skip connections taken here
-        self.encoder1 = resnet.layer1    # 64 → 256,  stride 4  total
-        self.encoder2 = resnet.layer2    # 256 → 512, stride 8  total
-        self.encoder3 = resnet.layer3    # 512 → 1024, stride 16 total
-        self.encoder4 = resnet.layer4    # 1024 → 2048, stride 32 total
+        self.encoder1 = resnet.layer1    # 64 -> 256,  stride 4  total
+        self.encoder2 = resnet.layer2    # 256 -> 512, stride 8  total
+        self.encoder3 = resnet.layer3    # 512 -> 1024, stride 16 total
+        self.encoder4 = resnet.layer4    # 1024 -> 2048, stride 32 total
 
         # Phase 1 freeze
         if freeze:
@@ -228,7 +228,7 @@ class UNet(nn.Module):
         # Segmentation head 
         self.head = nn.Sequential(
             nn.Dropout2d(p=dropout),
-            nn.Conv2d(64, num_classes, kernel_size=1),   # 64 → num_classes
+            nn.Conv2d(64, num_classes, kernel_size=1),   # 64 -> num_classes
         )
 
     # Encoder gradient helpers
@@ -302,6 +302,6 @@ class UNet(nn.Module):
             f"  trainable params: {counts['trainable_M']}M\n"
             f"  encoder         : ResNet-50 (ImageNet-1k V1)\n"
             f"  decoder         : 4× DecoderBlock (bilinear upsample + skip concat)\n"
-            f"  head            : Dropout2d({self.dropout_p}) → Conv2d(64→{self.num_classes})"
+            f"  head            : Dropout2d({self.dropout_p}) -> Conv2d(64->{self.num_classes})"
         )
 

@@ -14,13 +14,12 @@ except ImportError:
 
 class EfficientViT_WaRP(nn.Module):
     """
-    EfficientViT-B1 fine-tuned for WaRP-C 28-class waste classification.
 
     EfficientViT uses cascaded group attention (CGA): 
     each attention head processes a different split of the feature channels,
     reducing redundancy and improving diversity at linear computational cost.
 
-    Architecture: EfficientViT-B1 backbone (timm) → GlobalAvgPool → Linear(1600→28)
+    Architecture: EfficientViT-B1 backbone (timm) -> GlobalAvgPool -> Linear(1600->28)
 
     Two-phase fine-tuning:
       Phase 1: freeze backbone, train head only
@@ -40,7 +39,6 @@ class EfficientViT_WaRP(nn.Module):
         )
 
         # Detect true output dim empirically 
-        # EfficientViT-B is 1600, but let's confirm with a dummy forward pass
         with torch.no_grad():
             _dummy = torch.zeros(1, 3, 224, 224)
             num_features = self.backbone(_dummy).shape[-1]
@@ -48,7 +46,7 @@ class EfficientViT_WaRP(nn.Module):
         self.head = nn.Linear(num_features, num_classes)
 
         # trunc_normal_(std=0.02) : that s what I have foound as a standard for transformer heads
-        # Reference: Dosovitskiy et al. (2021) ViT paper; timm default: you can check this reference
+       
         # Kaiming init assumes ReLU activation
         nn.init.trunc_normal_(self.head.weight, std=0.02)
         nn.init.zeros_(self.head.bias)
@@ -56,7 +54,7 @@ class EfficientViT_WaRP(nn.Module):
         if pretrained:
             print(f'[EfficientViT_WaRP] Loaded pretrained {self.MODEL_NAME}')
             print(f'  Backbone features : {num_features}')
-            print(f'  Head              : Linear({num_features} → {num_classes})')
+            print(f'  Head              : Linear({num_features} -> {num_classes})')
             print(f'  Total parameters  : {self.count_all()["total"]:,}')
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

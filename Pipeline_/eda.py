@@ -52,7 +52,7 @@ class EDAModule:
         print(f"[EDAModule] Dataset loaded from: {self.data_root}")
         print(f"[EDAModule] Train classes : {len(self._train_data)}")
         print(f"[EDAModule] Test  classes : {len(self._test_data)}")
-        print(f"[EDAModule] Figures → {self.figures_dir}")
+        print(f"[EDAModule] Figures -> {self.figures_dir}")
 
 
     def _validate_dataset(self) -> None:
@@ -89,7 +89,7 @@ class EDAModule:
         out = self.figures_dir / filename
         fig.savefig(out, dpi=150, bbox_inches="tight")
         plt.close(fig)
-        print(f"  ✓ Saved → {out}")
+        print(f"  ✓ Saved -> {out}")
         return out
 
     @property
@@ -103,19 +103,6 @@ class EDAModule:
         Bar chart: image counts per class for train and test, plus an
         imbalance-ratio chart.
 
-        WHY we are doing this: because based on the literature review and what we have studied in the lectures
-        Class imbalance biases models toward majority classes by ignoring the minority do the accuracy matrix actually
-        does not give us a clear definition if the model is performing well or not
-        We compute the imbalance ratio = max_count / min_count.
-
-        Decision rules: it was based on this papers https://doi.org/10.1016/j.neunet.2018.07.011
-
-        We produce ONE figure per parent group so the 28 classes are never
-        crammed into a single unreadable chart.  Each figure shows:
-          top subplot   : raw train / test counts for that group's sub-classes
-          bottom subplot: per-sub-class imbalance ratio relative to the
-                          GLOBAL training mean (so ratios are comparable
-                          across groups)
         """
         classes      = self.classes
         train_counts = [len(self._train_data.get(c, [])) for c in classes]
@@ -126,10 +113,6 @@ class EDAModule:
         global_train_mean = np.mean(train_counts)
         global_test_mean  = np.mean(test_counts)
 
-        # ── one figure per parent group ───────────────────────────────────────
-        # parent_classes is a dict built in _load_paths:
-        #   { 'bottle': {'bottle-blue', 'bottle-dark', ...},
-        #     'glass':  {'glass-dark', ...}, ... }
         for parent, children in sorted(self.parent_classes.items()):
 
             # keep only children that actually appear in our loaded data
@@ -150,7 +133,6 @@ class EDAModule:
                 fontsize=14, fontweight="bold",
             )
 
-            # ── top: raw counts ──────────────────────────────────────────────
             b1 = ax1.bar(x - width/2, g_train, width,
                          label="Train", color="#2196F3", alpha=0.85)
             ax1.bar(x + width/2, g_test, width,
@@ -176,9 +158,6 @@ class EDAModule:
             ax1.set_ylabel("Number of images")
             ax1.legend()
 
-            # ── bottom: imbalance ratio vs GLOBAL mean ───────────────────────
-            # ratio > 1 → this sub-class is above the dataset average (green)
-            # ratio < 1 → this sub-class is below the dataset average (red)
             imbalance = [c / global_train_mean for c in g_train]
             colors    = ["#4CAF50" if r >= 1.0 else "#F44336" for r in imbalance]
             ax2.bar(x, imbalance, color=colors, alpha=0.85, edgecolor="white")
@@ -194,10 +173,9 @@ class EDAModule:
             ax2.legend()
 
             plt.tight_layout()
-            # save as  01_class_distribution_bottle.png,  01_class_distribution_glass.png  etc.
             self._save_fig(fig, f"01_class_distribution_{parent}.png")
 
-        # ── compute global imbalance stats (unchanged from before) ───────────
+        # compute global imbalance stats (unchanged from before)
         max_c = max(train_counts)
         min_c = min(train_counts)
         ratio = round(max_c / min_c, 2)
@@ -220,13 +198,12 @@ class EDAModule:
         print(f"  Total train     : {result['total_train']}")
         print(f"  Total test      : {result['total_test']}")
 
-        # this is based on the paper https://doi.org/10.1016/j.neunet.2018.07.011
         if ratio < 5:
-            print("  → Mild imbalance. Weighted loss function should suffice.")
+            print("  -> Mild imbalance. Weighted loss function should suffice.")
         elif ratio < 50:
-            print("  → Moderate imbalance. Use WeightedRandomSampler + weighted loss.")
+            print("  -> Moderate imbalance. Use WeightedRandomSampler + weighted loss.")
         else:
-            print("  → Severe imbalance. Consider oversampling minority classes too.")
+            print("  -> Severe imbalance. Consider oversampling minority classes too.")
 
         return result
 
@@ -234,18 +211,6 @@ class EDAModule:
     def plot_sample_grid(self, n_samples: int = 5) -> None:
         """
         Show 5 random images per class in a grid.
-
-        WHY THIS MATTERS
-        ----------------
-        Statistics alone never show you what the model actually sees.
-        A quick visual scan reveals:
-          • Classes that look nearly identical → expect confusion-matrix errors
-          • Images that are mostly background with a tiny cropped object
-          • Corrupted / extremely dark / blurry images
-          • Inconsistent crop quality across classes
-
-        These observations feed directly into augmentation design and help
-        you predict which class pairs will dominate your confusion matrix.
         """
         # one grid per parent group — same readability fix as plot_class_distribution
         for parent, children in sorted(self.parent_classes.items()):
@@ -290,21 +255,6 @@ class EDAModule:
         """
         Histograms of image width, height and aspect ratio across the full
         dataset (train + test).
-
-        WHY THIS MATTERS
-        ----------------
-        WaRP-C images are bounding-box crops, so they are NOT all the same
-        size.  Before choosing a resize target we need to know:
-
-        1. Typical size : informs target resolution (224 vs 256 vs 320).
-           Rule of thumb: use the 75th-percentile of the shorter side as
-           the resize target. 
-
-        2. Aspect ratio spread : if images are highly non-square, a plain
-           Resize(224, 224) distorts shapes.  Alternatives:
-             - Pad to square first, then resize  (preserves shape exactly)
-             - RandomResizedCrop  (standard for classification, handles it
-               naturally and adds implicit augmentation)
 
         """
         all_paths = [
@@ -388,17 +338,6 @@ class EDAModule:
         """
         Compute per-channel (R, G, B) mean and standard deviation and compare
         with standard ImageNet statistics.
-
-        WHY THIS MATTERS
-        ----------------
-        Every pretrained backbone was trained on ImageNet-normalised inputs.
-        Fine-tuning works best when you normalise the same way.
-
-        Option A  Use ImageNet stats (safe default for pretrained models):
-                    mean=[0.485, 0.456, 0.406]  std=[0.229, 0.224, 0.225]
-
-        Option B  Compute WaRP-C specific stats (better if the domain
-                  diverges significantly from natural photos
         """
         all_train = [p for paths in self._train_data.values() for p in paths]
         sampled   = random.sample(all_train, min(sample_size, len(all_train)))
@@ -428,7 +367,6 @@ class EDAModule:
         imagenet_std  = np.array([0.229, 0.224, 0.225])
         diff = float(np.abs(mean - imagenet_mean).mean())
 
-        # ── visualisation ────────────────────────────────────────────────────
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
         fig.suptitle("WaRP-C vs ImageNet normalisation statistics",
                      fontsize=13, fontweight="bold")
@@ -453,7 +391,6 @@ class EDAModule:
         plt.tight_layout()
         self._save_fig(fig, "04_pixel_stats.png")
 
-        # ── recommendation ───────────────────────────────────────────────────
         rec = (
             "Use ImageNet stats — WaRP-C is close enough for pretrained models."
             if diff < 0.05 else
@@ -475,7 +412,7 @@ class EDAModule:
         print(f"  ImageNet mean: {imagenet_mean.tolist()}")
         print(f"  ImageNet std : {imagenet_std.tolist()}")
         print(f"  Mean deviation from ImageNet: {diff:.4f}")
-        print(f"  → {rec}")
+        print(f"  -> {rec}")
 
         return result
 
@@ -483,18 +420,6 @@ class EDAModule:
     def plot_train_test_comparison(self) -> dict:
         """
         Compare per-class proportion (%) between the train and test splits.
-
-        WHY THIS MATTERS
-        ----------------
-        A well-constructed dataset has matching class proportions in both
-        splits (stratified split).  If they diverge:
-          • A class rare in test but common in train → model over-trains on it
-            but evaluation barely tests it.
-          • A class common in test but rare in train → model never learned it
-            properly, dragging down test metrics.
-
-        We flag any class whose proportion deviates by more than 2 percentage
-        points
         """
         classes     = self.classes
         total_train = sum(len(v) for v in self._train_data.values())
@@ -548,8 +473,8 @@ class EDAModule:
         print(f"\n  Max proportion deviation : {max_dev:.2f}%  "
               f"(class '{max_dev_class}')")
         print(
-            "  → Split looks well-stratified." if max_dev < 2.0
-            else "  → Notable deviation — mention in the report."
+            "  -> Split looks well-stratified." if max_dev < 2.0
+            else "  -> Notable deviation — mention in the report."
         )
 
         return result
@@ -558,10 +483,6 @@ class EDAModule:
     def check_duplicates(self) -> dict:
         """
         Filename-level duplicate check between the train and test sets.
-
-        WHY THIS MATTERS
-        ----------------
-        If the same image appears in both splits (data leakage)
         """
         train_names = {p.name for paths in self._train_data.values() for p in paths}
         test_names  = {p.name for paths in self._test_data.values()  for p in paths}
@@ -580,7 +501,7 @@ class EDAModule:
         print(f"  Overlap count          : {len(overlap)}")
 
         if len(overlap) == 0:
-            print("  → No duplicates found between train and test.  ✓")
+            print("  -> No duplicates found between train and test.  ✓")
         else:
             print(f"  ⚠  WARNING: {len(overlap)} duplicate filenames — "
                   f"potential data leakage!")
@@ -592,20 +513,6 @@ class EDAModule:
     def plot_brightness_per_class(self, n_per_class: int = 20) -> dict:
         """
         Mean luminance (brightness) per class, sampled from training images.
-
-        WHY THIS MATTERS
-        ----------------
-        WaRP-C is filmed under industrial conveyor-belt lighting that varies
-        significantly.  Some categories are inherently dark (dark glass,
-        dark bottles); others are bright (white detergent, full bottles).
-
-        This matters because:
-          1. If two visually similar classes differ mainly in brightness,
-             the model may learn brightness as a shortcut — which won't
-             generalise to new lighting conditions.
-          2. The range of brightness values tells us how strong to make the
-             ``brightness`` parameter in ``ColorJitter``.  A wide range means
-             we need aggressive augmentation to make the model lighting-invariant.
         """
         classes    = self.classes
         brightness = {}
@@ -667,9 +574,9 @@ class EDAModule:
         print(f"  Brightest class: '{brightest}' ({brightness[brightest]:.3f})")
         print(f"  Brightness std across classes: {result['dataset_std']:.3f}")
         if result["dataset_std"] > 0.08:
-            print("  → High brightness variance — use strong ColorJitter augmentation.")
+            print("  -> High brightness variance — use strong ColorJitter augmentation.")
         else:
-            print("  → Moderate brightness variance — standard ColorJitter is fine.")
+            print("  -> Moderate brightness variance — standard ColorJitter is fine.")
 
         return result
 
@@ -681,7 +588,7 @@ class EDAModule:
         self.stats_file.parent.mkdir(parents=True, exist_ok=True)
         with open(self.stats_file, "w") as f:
             json.dump(self._stats, f, indent=2)
-        print(f"\n  ✓ Stats saved → {self.stats_file}")
+        print(f"\n  ✓ Stats saved -> {self.stats_file}")
         return self.stats_file
 
 
@@ -728,5 +635,5 @@ class EDAModule:
 
         print(f"\n  Figures saved to : {self.figures_dir}/")
         print(f"  Stats saved to   : {self.stats_file}")
-        print(f"\n  Next step → Pipeline_/transforms.py")
+        print(f"\n  Next step -> Pipeline_/transforms.py")
         print(sep)

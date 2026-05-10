@@ -18,22 +18,17 @@ from PIL import Image
 from tqdm import tqdm
  
  
-# ── Constants derived from EDA ─────────────────────────────────────────────
+# Constants derived from EDA 
  
 IMG_SIZE = 224
- 
-# WaRP-C pixel statistics — EDA computed, mean_diff from ImageNet = 0.105 > 0.05
-# We use WaRP-C stats, NOT ImageNet stats
+
 WARP_MEAN = [0.337, 0.344, 0.350]
 WARP_STD  = [0.216, 0.209, 0.218]
  
-# ImageNet stats — kept for reference only
-# All pretrained models (ResNet, ViT, Swin, EfficientNet) were originally
-# trained on ImageNet using these exact values
+
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD  = [0.229, 0.224, 0.225]
  
-# minority threshold: class with < 30% of global mean (315) = minority
 MINORITY_THRESHOLD = 0.30
  
 VALID_EXTS = {".jpg", ".jpeg", ".png"}
@@ -44,20 +39,6 @@ class PadToSquare:
     """
     Pad a PIL image to a square BEFORE resizing.
  
-    WHY: EDA showed aspect ratios 0.2-5.2. Naive Resize(224,224) squashes
-    non-square images — a tall narrow bottle becomes a distorted square,
-    destroying the shape information the model needs.
- 
-    WHY REFLECT (not zero): Zero-padding creates black borders. A CNN can
-    learn "black border = rare class" as a shortcut. Reflect padding mirrors
-    edge pixels so there is no artificial border signal.
- 
-    Example:
-        Original:   80 × 200 px  (portrait, ratio = 0.4)
-        After pad:  200 × 200 px (reflect-padded on left and right)
-        After Resize: 224 × 224 px (no distortion)
- 
-    Applied to ALL models — this is preprocessing, not augmentation.
     """
  
     def __init__(self, padding_mode: str = "reflect"):
@@ -86,14 +67,7 @@ class PadToSquare:
 class WaRPDataset(Dataset):
     """
     PyTorch Dataset for WaRP-C.
- 
-    Automatically routes each sample to the correct transform pipeline:
-      - Minority classes (bottle-oil-full 24, detergent-box 66,
-        bottle-blue5l-full 89) → minority_transform (stronger aug)
-      - All other classes → transform (standard aug for that model)
- 
-    This routing is invisible to the training loop — it happens inside
-    __getitem__() automatically based on the class name.
+
     """
  
     def __init__(
@@ -112,10 +86,10 @@ class WaRPDataset(Dataset):
         if not self.root.exists():
             raise FileNotFoundError(
                 f"Processed split not found: {self.root}\n"
-                "→ Run WaRPPreprocessor().prepare() first."
+                "-> Run WaRPPreprocessor().prepare() first."
             )
  
-        # sorted alphabetically → deterministic label integers across all machines
+        # sorted alphabetically -> deterministic label integers across all machines
         self.classes:      list[str]      = sorted(
             d.name for d in self.root.iterdir() if d.is_dir()
         )
@@ -185,13 +159,6 @@ class WaRPPreprocessor:
     """
     All-in-one preprocessing and data pipeline for WaRP-C.
  
-    Usage (same 8 lines for every teammate, just change model_type):
-    -----------------------------------------------------------------
-    pp = WaRPPreprocessor()
-    pp.prepare()                                    # run ONCE
-    train_loader, test_loader = pp.get_loaders(model_type='swin')
-    criterion = nn.CrossEntropyLoss(
-                    weight=pp.get_class_weights(device='cuda'))
     """
  
     def __init__(
@@ -225,9 +192,6 @@ class WaRPPreprocessor:
     def get_val_transforms(self) -> T.Compose:
         """
         Deterministic pipeline for validation / test / inference.
-        Applied to ALL models at test time — no randomness whatsoever.
- 
-        Steps: PadToSquare → Resize(224) → ToTensor → Normalize
         """
         return T.Compose([
             PadToSquare(padding_mode="reflect"),
@@ -240,25 +204,6 @@ class WaRPPreprocessor:
     def _get_cnn_transforms(self) -> T.Compose:
         """
         LIGHT augmentation for CNNs training FROM SCRATCH.
- 
-        WHY LIGHT?
-        ----------
-        A CNN from scratch has never seen any image. It needs to first learn
-        basic visual features — edges, shapes, colours. Heavy augmentation
-        (MixUp, strong ColorJitter, RandomErasing) prevents this by showing
-        the model distorted images before it has built any representation.
- 
-        What papers do for CNN baselines:
-        - Ogrezeanu et al. (2024): resize + horizontal flip only
-        - Chhabra et al. (2024): rotation + horizontal flip only
-        - Standard waste classification literature: flip + small rotation
- 
-        We add mild ColorJitter because WaRP-C has lighting variation,
-        but keep everything else minimal.
- 
-        Steps:
-          PadToSquare → Resize(224) → HFlip → SmallRotation
-          → MildColorJitter → ToTensor → Normalize
         """
         return T.Compose([
             PadToSquare(padding_mode="reflect"),
@@ -278,22 +223,6 @@ class WaRPPreprocessor:
     def _get_pretrained_cnn_transforms(self, crop_scale_min: float = 0.6) -> T.Compose:
         """
         STANDARD augmentation for pretrained CNN backbones.
- 
-        WHY STRONGER THAN CNN FROM SCRATCH?
-        -------------------------------------
-        ResNet50 and EfficientNet are pretrained on 1.2M ImageNet images.
-        They already know what objects look like. Stronger augmentation
-        teaches them to be robust to WaRP-C-specific challenges without
-        preventing learning.
- 
-        Based on:
-        - He et al. (2016) ResNet: RandomResizedCrop + HFlip standard
-        - Tan & Le (2019) EfficientNet: same baseline + ColorJitter
-        - Sayem et al. (2024) on WaRP-C: color variation + perspective + fill
- 
-        Steps:
-          PadToSquare → RandomResizedCrop → Flips → Rotation
-          → ColorJitter → GaussianBlur → ToTensor → Normalize → Erasing
         """
         return T.Compose([
             PadToSquare(padding_mode="reflect"),
@@ -318,24 +247,6 @@ class WaRPPreprocessor:
     def _get_transformer_transforms(self) -> T.Compose:
         """
         STRONG augmentation for transformer-based pretrained models.
- 
-        WHY STRONGER THAN PRETRAINED CNNs?
-        ------------------------------------
-        Transformers (Swin, ViT, ConvNeXt) use self-attention over patches.
-        They benefit more from strong augmentation because:
-          1. They have more parameters → more prone to overfitting without it
-          2. Their attention mechanism handles MixUp soft labels well
-          3. Liu et al. (2021) Swin paper uses: RandomResizedCrop, HFlip,
-             RandAugment, Mixup, CutMix, label smoothing
- 
-        We use a slightly simplified version appropriate for our dataset size.
- 
-        Reference: Liu et al. (2021) Swin Transformer paper, training recipe.
- 
-        Steps:
-          PadToSquare → RandomResizedCrop(0.5-1.0) → Flips → Rotation
-          → StrongColorJitter → GaussianBlur → ToTensor → Normalize → Erasing
-        NOTE: MixUp is applied in the training loop, not here.
         """
         return T.Compose([
             PadToSquare(padding_mode="reflect"),
@@ -362,22 +273,6 @@ class WaRPPreprocessor:
     def _get_minority_transforms(self) -> T.Compose:
         """
         EXTRA-STRONG augmentation for minority classes only.
- 
-        Which classes: bottle-oil-full (24), detergent-box (66),
-                       bottle-blue5l-full (89) — all < 30% of global mean.
- 
-        WHY EXTRA STRONG?
-        -----------------
-        The WeightedRandomSampler makes these 24 images appear ~13x per epoch.
-        Without augmentation diversity, the model memorises exactly those
-        24 images — classic overfitting. Stronger augmentation makes each
-        repetition look visually different, effectively creating synthetic
-        variants within the image manifold.
- 
-        Reference: Buda et al. (2018) — for rho > 50, oversampling +
-        strong augmentation is optimal. Applied to pretrained models only
-        (CNN from scratch gets val pipeline for minority classes because it
-        needs clean examples to learn from).
         """
         return T.Compose([
             PadToSquare(padding_mode="reflect"),
@@ -401,7 +296,6 @@ class WaRPPreprocessor:
     def get_train_transforms(self) -> T.Compose:
         """
         Alias for the standard pretrained CNN training pipeline.
-        Kept for backward compatibility.
         """
         return self._get_pretrained_cnn_transforms()
  
@@ -411,9 +305,7 @@ class WaRPPreprocessor:
  
     def get_tta_transforms(self) -> list[T.Compose]:
         """
-        Test-Time Augmentation — 5 deterministic variants.
-        Run the same image through all 5, average softmax outputs.
-        Typical gain: +1-3% accuracy with zero training cost.
+        Return deterministic variants for Test-Time Augmentation.
         """
         base = [PadToSquare("reflect"), T.Resize((self.img_size, self.img_size))]
         norm = [T.ToTensor(), T.Normalize(mean=self.mean, std=self.std)]
@@ -433,16 +325,7 @@ class WaRPPreprocessor:
         alpha: float = 0.4,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """
-        MixUp batch augmentation — used in training loop for transformers.
- 
-        Example:
-          λ = 0.7  →  mixed = 0.7×bottle-blue + 0.3×bottle-transp
-          label   = [0.7, 0.3, 0, 0, ...]  (soft label)
- 
-        Use ONLY for: swin, vit, convnext, efficientnet.
-        Do NOT use for: CNN from scratch (resnet50 profile), llava, gnn.
- 
-        The _use_mixup flag is set automatically by get_loaders(model_type=...).
+        MixUp batch augmentation: used in training loop for transformers.
         """
         lam   = float(np.random.beta(alpha, alpha))
         idx   = torch.randperm(images.size(0), device=images.device)  # same device
@@ -458,32 +341,26 @@ class WaRPPreprocessor:
         "cnn":           (False,   False,   False, "cnn"),
  
         "resnet50":      (True,    True,    False, "pretrained_cnn"),
-        # Pretrained ResNet: sampler ON (rho=59.67 needs it), minority aug ON,
-        # no mixup (not standard in original ResNet training recipe)
- 
+        
         "efficientnet":  (False,    False,    False,  "cnn"),
-        # EfficientNet benefits from MixUp — Tan & Le (2019) used it
+       
  
         "swin":          (True,    True,    True,  "transformer"),
-        # Swin: Liu et al. (2021) training recipe uses MixUp + CutMix
- 
+      
         "vit":           (True,    True,    True,  "transformer"),
-        # ViT: same transformer recipe as Swin
+     
  
         "convnext":      (True,    True,    True,  "transformer"),
-        # ConvNeXt: Liu et al. (2022) uses same training recipe as Swin
+      
  
         "edgevit":       (True,    True,    False, "pretrained_cnn_gentle"),
-        # EdgeViT: lighter model, no mixup, slightly gentler crop
- 
+        
         "mobilevit":     (True,    True,    False, "pretrained_cnn_gentle"),
-        # MobileViT: same as EdgeViT
+     
  
         "llava":         (False,   False,   False, "val"),
-        # LLaVA: inference only, no training
  
         "gnn":           (False,   False,   False, "val"),
-        # GNN: feature extraction only, val pipeline
  
         "default":       (True,    True,    False, "pretrained_cnn"),
     }
@@ -510,31 +387,6 @@ class WaRPPreprocessor:
         """
         Build train and test DataLoaders.
  
-        Just pass model_type — everything else is automatic.
- 
-        Model types and what they do
-        ----------------------------
-        "cnn"          → light aug (flip + small rotation), NO sampler
-                         Use for your baseline CNN from scratch
-        "resnet50"     → standard aug, sampler ON, mixup OFF
-        "efficientnet" → standard aug, sampler ON, mixup ON
-        "swin"         → strong aug, sampler ON, mixup ON
-        "vit"          → strong aug, sampler ON, mixup ON
-        "convnext"     → strong aug, sampler ON, mixup ON
-        "edgevit"      → gentle aug, sampler ON, mixup OFF
-        "mobilevit"    → gentle aug, sampler ON, mixup OFF
-        "llava"        → val pipeline only (no training)
-        "gnn"          → val pipeline only (feature extraction)
- 
-        KEY POINT: Dataset/processed/ stores ORIGINAL-SIZE cleaned images.
-        The 224×224 normalised tensor is created in RAM per batch by the
-        DataLoader. Nothing augmented is ever saved to disk.
- 
-        Imbalance strategy (rho=59.67, Buda et al. 2018 Tier 3):
-          Layer 1 — WeightedRandomSampler (minority seen ~13x per epoch)
-          Layer 2 — CrossEntropyLoss(weight=class_weights) via get_class_weights()
-          Layer 3 — Stronger augmentation on minority classes
-          NOTE: CNN profile disables all 3 layers — see _MODEL_PROFILES above
         """
         profile = self._MODEL_PROFILES.get(
             model_type.lower(), self._MODEL_PROFILES["default"]
@@ -601,12 +453,7 @@ class WaRPPreprocessor:
     def get_class_weights(self, device: str = "cpu") -> Optional[torch.Tensor]:
         """
         Inverse-frequency class weights for CrossEntropyLoss.
- 
-        Formula: w_c = (1/count_c) × (N/num_classes)
- 
-        Usage:
-            weights   = pp.get_class_weights(device='cuda')
-            criterion = nn.CrossEntropyLoss(weight=weights)
+
         """
         if not self.stats_file.exists():
             return None
@@ -627,17 +474,6 @@ class WaRPPreprocessor:
         """
         One-time cleaning step: remove data leakage, copy to processed/.
  
-        Steps
-        -----
-        1. Find 18 filenames in BOTH train and test (data leakage)
-        2. Remove from TRAIN only (keep test → benchmark comparability)
-        3. Copy to Dataset/processed/train/<class>/ and .../test/<class>/
-        4. Write manifest.csv (one row per image)
-        5. Write split_stats.json
- 
-        Parameters
-        ----------
-        force : if True, delete and recreate even if processed/ exists
         """
         print("=" * 60)
         print("  WaRPPreprocessor.prepare()")
@@ -651,7 +487,7 @@ class WaRPPreprocessor:
         if not self.train_dir.exists():
             raise FileNotFoundError(
                 f"Raw data not found at {self.train_dir}\n"
-                "→ Run download_data.py first."
+                "-> Run download_data.py first."
             )
  
         duplicates   = self._find_duplicates()
@@ -718,19 +554,19 @@ class WaRPPreprocessor:
         print()
         print("  AUGMENTATION PER MODEL TYPE:")
         print("  ─────────────────────────────────────────────────────")
-        print("  cnn          → flip + rotation(15°) + mild jitter")
+        print("  cnn          -> flip + rotation(15°) + mild jitter")
         print("                 NO sampler, NO minority aug, NO mixup")
         print("                 (model trains from scratch — keep simple)")
-        print("  resnet50     → ResizedCrop + flips + rotation + jitter")
+        print("  resnet50     -> ResizedCrop + flips + rotation + jitter")
         print("                 + blur + erasing  |  sampler ON")
-        print("  efficientnet → same as resnet50  |  mixup ON")
-        print("  swin         → stronger crop(0.5) + flips + rotation")
+        print("  efficientnet -> same as resnet50  |  mixup ON")
+        print("  swin         -> stronger crop(0.5) + flips + rotation")
         print("                 + jitter + blur + erasing  |  mixup ON")
-        print("  vit          → same as swin  |  mixup ON")
-        print("  convnext     → same as swin  |  mixup ON")
-        print("  edgevit      → pretrained_cnn with gentler crop(0.7)")
-        print("  mobilevit    → same as edgevit")
-        print("  llava / gnn  → val pipeline only (inference)")
+        print("  vit          -> same as swin  |  mixup ON")
+        print("  convnext     -> same as swin  |  mixup ON")
+        print("  edgevit      -> pretrained_cnn with gentler crop(0.7)")
+        print("  mobilevit    -> same as edgevit")
+        print("  llava / gnn  -> val pipeline only (inference)")
         print()
         print("  Imbalance strategy (rho=59.67, Buda et al. 2018):")
         print("    Layer 1 — WeightedRandomSampler (for pretrained models)")

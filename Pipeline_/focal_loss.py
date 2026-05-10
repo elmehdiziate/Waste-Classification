@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-#--- based on Lin et al. (2017) Focal Loss for Dense Object Detection
 class FocalLoss(nn.Module):
     def __init__(self, gamma=2.0, alpha=None, weight=None, reduction="mean"):
         super().__init__()
